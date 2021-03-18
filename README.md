@@ -4,7 +4,10 @@
 
 - 为了不处理 `chunked`，将 http 协议限制在 http1.0
 - 通信出现 `SSL_R_SHORT_READ` 是不是错误
+- 工作中处理了 gzip 通信，但此处未引入 gzip 库
 
 > 分块传输编码只在HTTP协议1.1版本（HTTP/1.1）中提供。 [维基百科](https://zh.wikipedia.org/wiki/%E5%88%86%E5%9D%97%E4%BC%A0%E8%BE%93%E7%BC%96%E7%A0%81)
+
+公司运维的同事反馈服务器即便启用 gzip 通信，还依赖文件后缀名过滤是否真的压缩。
 
 在业务场景中，下载文件存在失败的案例。之后更换了使用 libcurl 的 curlpp 实现文件下载。 
