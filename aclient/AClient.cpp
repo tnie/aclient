@@ -102,217 +102,6 @@ void task_t::enable_etag()
     etag_ = !isPostTask();
 }
 
-void HTTPRequest::handle_resolve(asio::error_code ec, asio::ip::tcp::resolver::results_type endpoints)
-{
-    using asio::ip::tcp;
-    if (ec)
-    {
-        finish(ec);
-        return;
-    }
-    std::unique_lock<mutex> ulk(cancel_mutex_);
-    if (was_cancel_)
-    {
-        ulk.unlock();
-        finish(asio::error::operation_aborted);
-        return;
-    }
-    // 二选一
-    assert((nullptr == ssocket_) != (nullptr == insocket_));
-    auto & socket_ = ssocket_ ? ssocket_->lowest_layer(): *insocket_ ;
-    async_connect(socket_, endpoints, [this, self = shared_from_this()](asio::error_code ec, tcp::endpoint ep) {
-        self;
-        handle_connect(ec);
-    });
-}
-
-void HTTPRequest::handle_connect(asio::error_code ec)
-{
-    if (ec)
-    {
-        finish(ec);
-        return;
-    }
-    if (request_.empty())
-    {
-        string etag;
-        if (task_.need_etag())
-        {
-            auto url = task_.get_url(host_, port_, (insocket_ == nullptr));
-            if (!url.empty())
-            {
-                // 从本地缓存等位置读出
-                //etag = AClientOper::getInstance().get_etag(url);
-            }
-        }
-        request_ = task_.request_msg(host_, port_, etag);
-    }
-    std::unique_lock<mutex> ulk(cancel_mutex_);
-    if (was_cancel_)
-    {
-        ulk.unlock();
-        finish(asio::error::operation_aborted);
-        return;
-    }
-    // 二选一
-    if (insocket_)
-    {
-        auto & socket_ = *insocket_;
-        asio::async_write(socket_, asio::buffer(request_), [this, self = shared_from_this()](asio::error_code ec, std::size_t len) {
-            handle_write(ec, len);
-        });
-        assert(ssocket_ == nullptr);
-    }
-    else if (ssocket_)
-    {
-        ssocket_->async_handshake(asio::ssl::stream_base::client, [this, self = shared_from_this()](asio::error_code ec){
-            handle_handshake(ec);
-        });
-    }
-}
-
-void HTTPRequest::handle_handshake(asio::error_code ec)
-{
-    // http 通信不应进入此函数
-    assert(nullptr == insocket_);
-    if (ec)
-    {
-        finish(ec);
-        return;
-    }
-    std::unique_lock<mutex> ulk(cancel_mutex_);
-    if (was_cancel_)
-    {
-        ulk.unlock();
-        finish(asio::error::operation_aborted);
-        return;
-    }
-
-    // 二选一
-    if (ssocket_)
-    {
-        asio::async_write(*ssocket_, asio::buffer(request_), [this, self = shared_from_this()](asio::error_code ec, std::size_t len) {
-            handle_write(ec, len);
-        });
-        assert(insocket_ == nullptr);
-    }
-    else if (insocket_)
-    {
-        assert("未知错误- http 通信不应该进入此函数" && false);
-    }
-}
-
-void HTTPRequest::handle_gzip()
-{
-    const string gzip = response_.get_header("content-encoding");
-    if (gzip.find("gzip") != std::string::npos)
-    {
-        std::istream response_stream(&response_.get_response_buf());
-        std::istreambuf_iterator<char> eos;
-        const string msg = string(std::istreambuf_iterator<char>(response_stream), eos);
-        spdlog::info("Response of {} has 'gzip', and size is {}.", task_.page(), msg.size());
-        if (gzip::is_compressed(msg.c_str(), msg.size()))
-        {
-            string content = gzip::decompress(msg.c_str(), msg.size());
-            // 写回 response_
-            if (size_t size = content.size())
-            {
-                auto s2 = response_.get_response_buf().sputn(content.data(), size);
-                assert(s2 == size);
-                response_.add_header("content-length", std::to_string(s2), Passkey<HTTPRequest>()); // 更新大小
-                response_.add_header("content-encoding", "", Passkey<HTTPRequest>());   // 抹掉 ‘gzip’
-                spdlog::info("{} override buf & content-length: {} -> buffer.",task_.page(), s2);
-            }
-        }
-        else
-        {
-            const string url = task_.get_url(host_, port_, ssocket_ != nullptr);
-            spdlog::error("gzip decompress failed. {}", url);
-        }
-    }
-}
-
-void HTTPRequest::finish(const std::error_code& ec, std::string msg)
-{
-    std::string ip;
-    if (ip.empty())
-    {
-        asio::error_code err;
-        // 二选一
-        assert((nullptr == ssocket_) != (nullptr == insocket_));
-        auto & socket_ = ssocket_ ? ssocket_->lowest_layer() : *insocket_;
-        auto ep = socket_.remote_endpoint(err);
-        ip = err ? "null" : ep.address().to_string();
-    }
-    if (ec && (ec.value() != asio::error::operation_aborted))
-    {
-
-        spdlog::error("{} faild:{}, {}. http{}://{}({}):{}@{}",msg, ec.value(), ec.message(),
-            ssocket_ ? "s" : "",
-            host_, ip, port_, static_cast<void*>(this));
-    }
-    if(! ec)
-    {
-        // finish
-    }
-    else if (asio::error::operation_aborted /*995*/ == ec)
-    {
-        // cancel
-    }
-    handle_gzip();
-    if (handler_)
-    {
-        if (asio::error::eof == ec)  // maybe incorrect?
-        {
-            // 是否正确存在疑问，所以没有缓存
-            handler_(*this, response_, std::error_code());
-        }
-        else
-        {
-            if (!ec)
-            {
-                auto status_code = response_.get_status_code();
-                const string url = task_.get_url(host_, port_, ssocket_ != nullptr);
-                auto &buf = response_.get_response_buf();
-                const auto size = buf.size();
-                if (304 == status_code)
-                {
-                    assert(size == 0);
-                    std::shared_ptr<char> ptr;
-                    size_t length = 0;
-                    //从本地缓存等位置重新读出
-                    //std::tie(ptr, length) = AClientOper::getInstance().get(url);
-                    if (length)
-                    {
-                        auto s2 = buf.sputn(ptr.get(), length);
-                        assert(s2 == length);
-                    }
-                }
-                else if (200 == status_code && task_.need_etag())
-                {
-                    const string etag = response_.get_etag();
-                    auto   buffer = std::shared_ptr<char>(new char[size], [](char* p) {
-                        delete[] p;
-                    });
-                    auto s2 = buf.sgetn(buffer.get(), size);
-                    spdlog::info("{} (with {} @{}): {}/{} -> buffer", task_.page(), etag, ip, s2, size);
-                    //更新到本地缓存等位置
-                    //AClientOper::getInstance().update(url, etag, buffer, size);
-                    // response_ has nothing. rewrite
-                    assert(buf.size() == 0);
-                    buf.sputn(buffer.get(), size);
-                }
-            }
-
-            handler_(*this, response_, ec);
-        }
-    }
-    else
-    {
-        default_handler(*this, response_, ec);
-    }
-}
-
 void HTTPRequest::set_host(std::string host, unsigned port)
 {
     if (host.find("https://") != std::string::npos)
@@ -395,22 +184,104 @@ void HTTPRequest::execute()
     });
 }
 
-void HTTPRequest::cancel()
+void HTTPRequest::handle_resolve(asio::error_code ec, asio::ip::tcp::resolver::results_type endpoints)
 {
-#if !defined(_WIN32_WINNT) || _WIN32_WINNT <= 0x502 // Windows Server 2003 or earlier.
-    spdlog::warn("Not implemented '{}' in Windows Server 2003 or earlier.", __FUNCTION__);
-#else
-    unique_lock<mutex> ulk(cancel_mutex_);
-    was_cancel_ = true;
-    resolver_.cancel();
+    using asio::ip::tcp;
+    if (ec)
+    {
+        finish(ec);
+        return;
+    }
+    std::unique_lock<mutex> ulk(cancel_mutex_);
+    if (was_cancel_)
+    {
+        ulk.unlock();
+        finish(asio::error::operation_aborted);
+        return;
+    }
     // 二选一
     assert((nullptr == ssocket_) != (nullptr == insocket_));
     auto & socket_ = ssocket_ ? ssocket_->lowest_layer() : *insocket_;
-    if (socket_.is_open())
+    async_connect(socket_, endpoints, [this, self = shared_from_this()](asio::error_code ec, tcp::endpoint ep) {
+        self;
+        handle_connect(ec);
+    });
+}
+
+void HTTPRequest::handle_connect(asio::error_code ec)
+{
+    if (ec)
     {
-        socket_.cancel();
+        finish(ec);
+        return;
     }
-#endif
+    if (request_.empty())
+    {
+        string etag;
+        if (task_.need_etag())
+        {
+            auto url = task_.get_url(host_, port_, (insocket_ == nullptr));
+            if (!url.empty())
+            {
+                // 从本地缓存等位置读出
+                //etag = AClientOper::getInstance().get_etag(url);
+            }
+        }
+        request_ = task_.request_msg(host_, port_, etag);
+    }
+    std::unique_lock<mutex> ulk(cancel_mutex_);
+    if (was_cancel_)
+    {
+        ulk.unlock();
+        finish(asio::error::operation_aborted);
+        return;
+    }
+    // 二选一
+    if (insocket_)
+    {
+        auto & socket_ = *insocket_;
+        asio::async_write(socket_, asio::buffer(request_), [this, self = shared_from_this()](asio::error_code ec, std::size_t len) {
+            handle_write(ec, len);
+        });
+        assert(ssocket_ == nullptr);
+    }
+    else if (ssocket_)
+    {
+        ssocket_->async_handshake(asio::ssl::stream_base::client, [this, self = shared_from_this()](asio::error_code ec){
+            handle_handshake(ec);
+        });
+    }
+}
+
+void HTTPRequest::handle_handshake(asio::error_code ec)
+{
+    // http 通信不应进入此函数
+    assert(nullptr == insocket_);
+    if (ec)
+    {
+        finish(ec);
+        return;
+    }
+    std::unique_lock<mutex> ulk(cancel_mutex_);
+    if (was_cancel_)
+    {
+        ulk.unlock();
+        finish(asio::error::operation_aborted);
+        return;
+    }
+
+    // 二选一
+    if (ssocket_)
+    {
+        asio::async_write(*ssocket_, asio::buffer(request_), [this, self = shared_from_this()](asio::error_code ec, std::size_t len) {
+            handle_write(ec, len);
+        });
+        assert(insocket_ == nullptr);
+    }
+    else if (insocket_)
+    {
+        assert("未知错误- http 通信不应该进入此函数" && false);
+    }
 }
 
 void HTTPRequest::handle_write(asio::error_code ec, std::size_t len)
@@ -537,7 +408,7 @@ void HTTPRequest::handle_read_headers(asio::error_code ec, std::size_t)
         }
         size_t pz = header.find(":");
         string key1 = header.substr(0, pz);
-        response_.add_header( std::move(key1), header.substr(pz + 1), Passkey<HTTPRequest>());
+        response_.add_header(std::move(key1), header.substr(pz + 1), Passkey<HTTPRequest>());
     }
     string ssize = response_.get_header("Content-Length");
     if (!ssize.empty())
@@ -567,7 +438,7 @@ void HTTPRequest::handle_read_headers(asio::error_code ec, std::size_t)
         }
         else
         {
-            spdlog::info ("'{}' response has no 'Content-Length'.", task_.page());
+            spdlog::info("'{}' response has no 'Content-Length'.", task_.page());
         }
         if (ssocket_)    // 二选一
         {
@@ -638,6 +509,135 @@ void HTTPRequest::handle_read_content(asio::error_code ec, std::size_t)
     {
         finish(ec, "async_read");
     }
+}
+
+void HTTPRequest::finish(const std::error_code& ec, std::string msg)
+{
+    std::string ip;
+    if (ip.empty())
+    {
+        asio::error_code err;
+        // 二选一
+        assert((nullptr == ssocket_) != (nullptr == insocket_));
+        auto & socket_ = ssocket_ ? ssocket_->lowest_layer() : *insocket_;
+        auto ep = socket_.remote_endpoint(err);
+        ip = err ? "null" : ep.address().to_string();
+    }
+    if (ec && (ec.value() != asio::error::operation_aborted))
+    {
+
+        spdlog::error("{} faild:{}, {}. http{}://{}({}):{}@{}", msg, ec.value(), ec.message(),
+            ssocket_ ? "s" : "",
+            host_, ip, port_, static_cast<void*>(this));
+    }
+    if (!ec)
+    {
+        // finish
+    }
+    else if (asio::error::operation_aborted /*995*/ == ec)
+    {
+        // cancel
+    }
+    handle_gzip();
+    if (handler_)
+    {
+        if (asio::error::eof == ec)  // maybe incorrect?
+        {
+            // 是否正确存在疑问，所以没有缓存
+            handler_(*this, response_, std::error_code());
+        }
+        else
+        {
+            if (!ec)
+            {
+                auto status_code = response_.get_status_code();
+                const string url = task_.get_url(host_, port_, ssocket_ != nullptr);
+                auto &buf = response_.get_response_buf();
+                const auto size = buf.size();
+                if (304 == status_code)
+                {
+                    assert(size == 0);
+                    std::shared_ptr<char> ptr;
+                    size_t length = 0;
+                    //从本地缓存等位置重新读出
+                    //std::tie(ptr, length) = AClientOper::getInstance().get(url);
+                    if (length)
+                    {
+                        auto s2 = buf.sputn(ptr.get(), length);
+                        assert(s2 == length);
+                    }
+                }
+                else if (200 == status_code && task_.need_etag())
+                {
+                    const string etag = response_.get_etag();
+                    auto   buffer = std::shared_ptr<char>(new char[size], [](char* p) {
+                        delete[] p;
+                    });
+                    auto s2 = buf.sgetn(buffer.get(), size);
+                    spdlog::info("{} (with {} @{}): {}/{} -> buffer", task_.page(), etag, ip, s2, size);
+                    //更新到本地缓存等位置
+                    //AClientOper::getInstance().update(url, etag, buffer, size);
+                    // response_ has nothing. rewrite
+                    assert(buf.size() == 0);
+                    buf.sputn(buffer.get(), size);
+                }
+            }
+
+            handler_(*this, response_, ec);
+        }
+    }
+    else
+    {
+        default_handler(*this, response_, ec);
+    }
+}
+
+void HTTPRequest::handle_gzip()
+{
+    const string gzip = response_.get_header("content-encoding");
+    if (gzip.find("gzip") != std::string::npos)
+    {
+        std::istream response_stream(&response_.get_response_buf());
+        std::istreambuf_iterator<char> eos;
+        const string msg = string(std::istreambuf_iterator<char>(response_stream), eos);
+        spdlog::info("Response of {} has 'gzip', and size is {}.", task_.page(), msg.size());
+        if (gzip::is_compressed(msg.c_str(), msg.size()))
+        {
+            string content = gzip::decompress(msg.c_str(), msg.size());
+            // 写回 response_
+            if (size_t size = content.size())
+            {
+                auto s2 = response_.get_response_buf().sputn(content.data(), size);
+                assert(s2 == size);
+                response_.add_header("content-length", std::to_string(s2), Passkey<HTTPRequest>()); // 更新大小
+                response_.add_header("content-encoding", "", Passkey<HTTPRequest>());   // 抹掉 ‘gzip’
+                spdlog::info("{} override buf & content-length: {} -> buffer.", task_.page(), s2);
+            }
+        }
+        else
+        {
+            const string url = task_.get_url(host_, port_, ssocket_ != nullptr);
+            spdlog::error("gzip decompress failed. {}", url);
+        }
+    }
+}
+
+void HTTPRequest::cancel()
+{
+#if !defined(_WIN32_WINNT) || _WIN32_WINNT <= 0x502 // Windows Server 2003 or earlier.
+    spdlog::warn("Not implemented '{}' in Windows Server 2003 or earlier.", __FUNCTION__);
+#else
+    unique_lock<mutex> ulk(cancel_mutex_);
+    was_cancel_ = true;
+    resolver_.cancel();
+    // 二选一
+    assert((nullptr == ssocket_) != (nullptr == insocket_));
+    auto & socket_ = ssocket_ ? ssocket_->lowest_layer() : *insocket_;
+    if (socket_.is_open())
+    {
+        socket_.cancel();
+    }
+#endif
 }
 
 void HTTPRequest::set_callback(Callback hl)
