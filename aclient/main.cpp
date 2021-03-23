@@ -35,5 +35,5 @@ int main()
         }
     });
     request->execute();
-    getchar();
+    HTTPClient::getInstance().wait();
 }
