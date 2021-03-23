@@ -173,7 +173,7 @@ void HTTPRequest::execute()
     using asio::ip::tcp;
     asio::co_spawn(ioc_, [this, self = shared_from_this()]()->asio::awaitable<void> {
         auto token = asio::use_awaitable;
-        auto executor = co_await asio::this_coro::executor;
+        asio::executor executor = co_await asio::this_coro::executor;
         try
         {
             auto endpoints = co_await resolver_.async_resolve(tcp::v4(), host_, std::to_string(port_), token);
@@ -209,7 +209,7 @@ void HTTPRequest::execute()
             co_return;
         }
         asio::co_spawn(executor, [this, self ]() {
-            return  handle_response(request_);
+            return  handle_response(request_);  // TODO 和 co_return 区别
         }, asio::detached);
     }, asio::detached);
 }
