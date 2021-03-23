@@ -123,13 +123,9 @@ public:
     virtual void execute();
     virtual void cancel();
 private:
-    void handle_resolve(asio::error_code, asio::ip::tcp::resolver::results_type endpoints);
-    void handle_connect(asio::error_code ec);
-    void handle_handshake(asio::error_code ec);
-    void handle_write(asio::error_code ec, std::size_t len);
-    void handle_read_status_line(asio::error_code ec, std::size_t);
-    void handle_read_headers(asio::error_code err, std::size_t);
-    void handle_read_content(asio::error_code err, std::size_t);
+    asio::awaitable<void> handle_response(const std::string&);
+    // 返回值 content_length，如果没有则返回 -1
+    long read_header(std::istream& in);
     // 如果通信时采用了 gzip 压缩，解压缩并回写（buf 和 size）
     void handle_gzip();
     void finish(const std::error_code&, std::string msg = "");
@@ -141,7 +137,6 @@ private:
     HTTPResponse response_;
     Callback handler_;
     bool was_cancel_;
-    std::mutex cancel_mutex_;
     unsigned int uuid_;
     //
     asio::io_context& ioc_;

@@ -153,16 +153,16 @@ void HTTPRequest::execute()
     assert(host_.empty() == false);
     if (request_.empty())
     {
-        string etag;
-        if (task_.need_etag())
+    string etag;
+    if (task_.need_etag())
+    {
+        auto url = task_.get_url(host_, port_, (insocket_ == nullptr));
+        if (!url.empty())
         {
-            auto url = task_.get_url(host_, port_, (insocket_ == nullptr));
-            if (!url.empty())
-            {
                 // 从本地缓存等位置读出
                 //etag = AClientOper::getInstance().get_etag(url);
-            }
         }
+    }
         request_ = task_.request_msg(host_, port_, etag);
     }
     assert(request_.empty() == false);
@@ -170,184 +170,74 @@ void HTTPRequest::execute()
     assert((insocket_ == nullptr) != (ssocket_ == nullptr));
 
     response_.reset();
-    std::unique_lock<mutex> ulk(cancel_mutex_);
-    if (was_cancel_)
-    {
-        ulk.unlock();
-        finish(asio::error::operation_aborted);
-        return;
-    }
     using asio::ip::tcp;
-    resolver_.async_resolve(tcp::v4(), host_, std::to_string(port_), [this, self = shared_from_this()](asio::error_code ec, tcp::resolver::results_type ep) {
-        self;
-        handle_resolve(ec, ep);
-    });
-}
-
-void HTTPRequest::handle_resolve(asio::error_code ec, asio::ip::tcp::resolver::results_type endpoints)
-{
-    using asio::ip::tcp;
-    if (ec)
-    {
-        finish(ec);
-        return;
-    }
-    std::unique_lock<mutex> ulk(cancel_mutex_);
-    if (was_cancel_)
-    {
-        ulk.unlock();
-        finish(asio::error::operation_aborted);
-        return;
-    }
-    // 二选一
-    assert((nullptr == ssocket_) != (nullptr == insocket_));
-    auto & socket_ = ssocket_ ? ssocket_->lowest_layer() : *insocket_;
-    async_connect(socket_, endpoints, [this, self = shared_from_this()](asio::error_code ec, tcp::endpoint ep) {
-        self;
-        handle_connect(ec);
-    });
-}
-
-void HTTPRequest::handle_connect(asio::error_code ec)
-{
-    if (ec)
-    {
-        finish(ec);
-        return;
-    }
-    if (request_.empty())
-    {
-        string etag;
-        if (task_.need_etag())
+    asio::co_spawn(ioc_, [this, self = shared_from_this()]()->asio::awaitable<void> {
+        auto token = asio::use_awaitable;
+        auto executor = co_await asio::this_coro::executor;
+        try
         {
-            auto url = task_.get_url(host_, port_, (insocket_ == nullptr));
-            if (!url.empty())
+            auto endpoints = co_await resolver_.async_resolve(tcp::v4(), host_, std::to_string(port_), token);
+            // 二选一
+            assert((nullptr == ssocket_) != (nullptr == insocket_));
+            auto & socket_ = ssocket_ ? ssocket_->lowest_layer() : *insocket_;
+            co_await async_connect(socket_, endpoints, token);
+            assert(false == request_.empty());
+            if (ssocket_)
             {
-                // 从本地缓存等位置读出
-                //etag = AClientOper::getInstance().get_etag(url);
+                co_await ssocket_->async_handshake(asio::ssl::stream_base::client, token);
             }
+            assert((nullptr == ssocket_) != (nullptr == insocket_));
+            auto bytes = insocket_ ?    // 二选一
+                co_await asio::async_write(*insocket_, asio::buffer(request_), token) :
+                co_await asio::async_write(*ssocket_, asio::buffer(request_), token);
+            // NOTE 有的服务端在客户端关闭写（继续读）之后，会直接关闭连接
+            //socket_.shutdown(asio::socket_base::shutdown_send);
+            assert(request_.size() == bytes);
+            size_t len = insocket_ ?
+                co_await asio::async_read_until(*insocket_, response_.get_response_buf(), "\r\n", token) :
+                co_await asio::async_read_until(*ssocket_, response_.get_response_buf(), "\r\n", token);
         }
-        request_ = task_.request_msg(host_, port_, etag);
-    }
-    std::unique_lock<mutex> ulk(cancel_mutex_);
-    if (was_cancel_)
-    {
-        ulk.unlock();
-        finish(asio::error::operation_aborted);
-        return;
-    }
-    // 二选一
-    if (insocket_)
-    {
-        auto & socket_ = *insocket_;
-        asio::async_write(socket_, asio::buffer(request_), [this, self = shared_from_this()](asio::error_code ec, std::size_t len) {
-            handle_write(ec, len);
-        });
-        assert(ssocket_ == nullptr);
-    }
-    else if (ssocket_)
-    {
-        ssocket_->async_handshake(asio::ssl::stream_base::client, [this, self = shared_from_this()](asio::error_code ec){
-            handle_handshake(ec);
-        });
-    }
-}
-
-void HTTPRequest::handle_handshake(asio::error_code ec)
-{
-    // http 通信不应进入此函数
-    assert(nullptr == insocket_);
-    if (ec)
-    {
-        finish(ec);
-        return;
-    }
-    std::unique_lock<mutex> ulk(cancel_mutex_);
-    if (was_cancel_)
-    {
-        ulk.unlock();
-        finish(asio::error::operation_aborted);
-        return;
-    }
-
-    // 二选一
-    if (ssocket_)
-    {
-        asio::async_write(*ssocket_, asio::buffer(request_), [this, self = shared_from_this()](asio::error_code ec, std::size_t len) {
-            handle_write(ec, len);
-        });
-        assert(insocket_ == nullptr);
-    }
-    else if (insocket_)
-    {
-        assert("未知错误- http 通信不应该进入此函数" && false);
-    }
-}
-
-void HTTPRequest::handle_write(asio::error_code ec, std::size_t len)
-{
-    if (ec)
-    {
-        finish(ec, "async_write");
-        return;
-    }
-    // NOTE 有的服务端在客户端关闭写（继续读）之后，会直接关闭连接
-    //socket_.shutdown(asio::socket_base::shutdown_send);
-    std::unique_lock<mutex> ulk(cancel_mutex_);
-    if (was_cancel_)
-    {
-        ulk.unlock();
-        finish(asio::error::operation_aborted);
-        return;
-    }
-    if (request_.size() == len)
-    {
-        if (ssocket_)
+        catch (const std::system_error& e)
         {
-            asio::async_read_until(*ssocket_, response_.get_response_buf(), "\r\n", [this, self = shared_from_this()](asio::error_code ec, std::size_t len) {
-                handle_read_status_line(ec, len);
-            });
-            assert(insocket_ == nullptr);
-
+            asio::error_code ec = was_cancel_ ? asio::error::operation_aborted : e.code();
+            finish(ec, e.what());
+            co_return;
         }
-        else if (insocket_)
+        catch (const std::exception& e)
         {
-            asio::async_read_until(*insocket_, response_.get_response_buf(), "\r\n", [this, self = shared_from_this()](asio::error_code ec, std::size_t len) {
-                handle_read_status_line(ec, len);
-            });
+            spdlog::error("{} {}:{}", e.what(), __FILE__, __LINE__);
+            co_return;
         }
-    }
+        asio::co_spawn(executor, [this, self ]() {
+            return  handle_response(request_);
+        }, asio::detached);
+    }, asio::detached);
 }
-void HTTPRequest::handle_read_status_line(asio::error_code ec, std::size_t)
+
+asio::awaitable<void> HTTPRequest::handle_response(const std::string& request)
 {
-    if (ec)
-    {
-        finish(ec, "async_read");
-        return;
-    }
     // Check that response is OK.
     std::istream response_stream(&response_.get_response_buf());
-    std::string http_version;
-    response_stream >> http_version;
-    unsigned int status_code;
+    unsigned int status_code = 0;
     try
     {
+        std::string http_version;
+        response_stream >> http_version;
         response_stream >> status_code;
+        response_.set_status_code(status_code, Passkey<HTTPRequest>());
+        if (!response_stream || http_version.substr(0, 5) != "HTTP/")
+        {
+            throw std::system_error(http_errors::invalid_response);
+        }
     }
-    catch (const std::exception&)
+    catch (const std::exception& e)
     {
-        spdlog::error("Invalid response. {}", task_.page());
+        spdlog::error("Invalid response when request {}. {} {}:{}", task_.page(),
+            e.what(), __FILE__, __LINE__);
         finish(http_errors::invalid_response);
-        return;
+        co_return;
     }
-    response_.set_status_code(status_code, Passkey<HTTPRequest>());
-    if (!response_stream || http_version.substr(0, 5) != "HTTP/")
-    {
-        spdlog::error("Invalid response. {}", task_.page());
-        finish(http_errors::invalid_response);
-        return;
-    }
-    else if (status_code == 304)
+    if (status_code == 304)
     {
         spdlog::debug("Not modified. {}", task_.page());
         // 如果要复用 socket，已接收的缓存以及 flying 的数据都需要处理
@@ -361,40 +251,60 @@ void HTTPRequest::handle_read_status_line(asio::error_code ec, std::size_t)
     // Remove symbol '\n' from the buffer
     response_stream.get();
     response_.set_status_message(std::move(status_message), Passkey<HTTPRequest>());
+    auto token = asio::use_awaitable;
 
-    // Read the response headers, which are terminated by a blank line.
-    std::unique_lock<mutex> ulk(cancel_mutex_);
-    if (was_cancel_)
+    try
     {
-        ulk.unlock();
-        finish(asio::error::operation_aborted);
-        return;
+        // Read the response headers, which are terminated by a blank line.
+        assert((nullptr == ssocket_) != (nullptr == insocket_));
+        auto len = ssocket_ ?    // 二选一
+            co_await asio::async_read_until(*ssocket_, response_.get_response_buf(), "\r\n\r\n", token) :
+            co_await asio::async_read_until(*insocket_, response_.get_response_buf(), "\r\n\r\n", token);
+        // Process the response headers.
+        std::istream response_stream(&response_.get_response_buf());
+        auto content_length = read_header(response_stream);
+        const std::string conn("keep-alive");
+        if ((content_length < 0) && (request.find(conn) != std::string::npos))
+        {
+            // 与 keep-alive 冲突：如果启用了 keep-alive 属性，会死等，巨慢
+            spdlog::error("'{}' request didn't see response's 'Content-Length'. {}", task_.page());
+        }
+        // Start reading remaining data .
+        auto size = response_.get_response_buf().size();
+        const auto remain = (content_length >= size) ? (content_length - size) : std::numeric_limits<unsigned long>::max();
+        const auto step = (content_length >= size) ? std::min(remain, 1024ul) : 1024ul;
+        asio::error_code ec;
+        //auto len = co_await asio::async_read(*ssocket_, response_.m_response_buf, asio::transfer_at_least(content_length - size),
+        //    asio::redirect_error(token, ec));
+        for (size_t len = 0; !ec && len < remain; )
+        {
+            auto buf = response_.get_response_buf().prepare(step);
+            assert((nullptr == ssocket_) != (nullptr == insocket_));
+            auto bytes = ssocket_ ?    // 二选一
+                co_await ssocket_->async_read_some(asio::buffer(buf), asio::redirect_error(token, ec)) :
+                co_await insocket_->async_read_some(asio::buffer(buf), asio::redirect_error(token, ec));
+            response_.get_response_buf().commit(bytes);
+            len += bytes;
+        }
+        if (asio::error::eof/*2*/ != ec)
+            throw std::system_error(ec);
+        finish(asio::error_code());
     }
-    if (ssocket_)    // 二选一
+    catch (const std::system_error& e)
     {
-        asio::async_read_until(*ssocket_, response_.get_response_buf(), "\r\n\r\n", [this, self = shared_from_this()](asio::error_code ec, std::size_t len) {
-            handle_read_headers(ec, len);
-        });
-        assert(insocket_ == nullptr);
+        asio::error_code ec = was_cancel_ ? asio::error::operation_aborted : e.code();
+        finish(ec, e.what());
+        co_return;
     }
-    else if (insocket_)
+    catch (const std::exception& e)
     {
-        asio::async_read_until(*insocket_, response_.get_response_buf(), "\r\n\r\n", [this, self = shared_from_this()](asio::error_code ec, std::size_t len) {
-            handle_read_headers(ec, len);
-        });
+        spdlog::error("{} {}:{}", e.what(), __FILE__, __LINE__);
+        co_return;
     }
-
 }
 
-void HTTPRequest::handle_read_headers(asio::error_code ec, std::size_t)
+long HTTPRequest::read_header(std::istream& response_stream)
 {
-    if (ec)
-    {
-        finish(ec, "async_read");
-        return;
-    }
-    // Process the response headers.
-    std::istream response_stream(&response_.get_response_buf());
     std::string header;
 
     long  content_length = -1;
@@ -410,6 +320,7 @@ void HTTPRequest::handle_read_headers(asio::error_code ec, std::size_t)
         string key1 = header.substr(0, pz);
         response_.add_header(std::move(key1), header.substr(pz + 1), Passkey<HTTPRequest>());
     }
+    // 针对个别属性做特殊处理
     string ssize = response_.get_header("Content-Length");
     if (!ssize.empty())
     {
@@ -419,96 +330,12 @@ void HTTPRequest::handle_read_headers(asio::error_code ec, std::size_t)
     {
         spdlog::info("Content-length of {}'s response is {}.", task_.page(), content_length);
     }
-
-    std::unique_lock<mutex> ulk(cancel_mutex_);
-    if (was_cancel_)
+    if (response_.get_header("transfer-encoding").empty() == false)
     {
-        ulk.unlock();
-        finish(asio::error::operation_aborted);
-        return;
+        // 不能处理分包
+        assert(header.find("chunked") != std::string::npos);
     }
-    // Start reading remaining data .
-    if (content_length < 0)
-    {
-        const std::string conn("keep-alive");
-        if (request_.find(conn) != std::string::npos)
-        {
-            // 与 keep-alive 冲突：如果启用了 keep-alive 属性，会死等，巨慢
-            spdlog::error("'{}' response has no 'Content-Length'.", task_.page());
-        }
-        else
-        {
-            spdlog::info("'{}' response has no 'Content-Length'.", task_.page());
-        }
-        if (ssocket_)    // 二选一
-        {
-            asio::async_read(*ssocket_, response_.get_response_buf(), asio::transfer_all(),
-                [this, self = shared_from_this()](asio::error_code err, std::size_t len) {
-                handle_read_content(err, len);
-            });
-            assert(nullptr == insocket_);
-        }
-        else if (insocket_)
-        {
-            asio::async_read(*insocket_, response_.get_response_buf(), asio::transfer_all(),
-                [this, self = shared_from_this()](asio::error_code err, std::size_t len) {
-                handle_read_content(err, len);
-            });
-        }
-    }
-    else
-    {
-        auto size = response_.get_response_buf().size();
-        spdlog::info("'{}' read {} bytes at least.", task_.page(), content_length - size);
-        if (ssocket_)    // 二选一
-        {
-            asio::async_read(*ssocket_, response_.get_response_buf(), asio::transfer_at_least(content_length - size),
-                [this, self = shared_from_this()](asio::error_code err, std::size_t len) {
-                handle_read_content(err, len);
-            });
-            assert(nullptr == insocket_);
-        }
-        else if (insocket_)
-        {
-            asio::async_read(*insocket_, response_.get_response_buf(), asio::transfer_at_least(content_length - size),
-                [this, self = shared_from_this()](asio::error_code err, std::size_t len) {
-                handle_read_content(err, len);
-            });
-        }
-
-    }
-}
-
-void HTTPRequest::handle_read_content(asio::error_code ec, std::size_t)
-{
-    if (asio::error::eof/*2*/ == ec)
-    {
-        finish(asio::error_code());
-    }
-#if _WIN32_WINNT>=0x0600 && SSL_R_SHORT_READ   // 细节见《short read workaround.md》
-    // TODO maybe incorrect?
-    else if (ec.category() == asio::error::get_ssl_category() &&
-        ec.value() == ERR_PACK(ERR_LIB_SSL, 0, SSL_R_SHORT_READ)) {
-        // -> not a real error, just a normal TLS shutdown
-        do
-        {
-            asio::error_code err;
-            assert(nullptr != ssocket_);
-            auto & socket_ = ssocket_->lowest_layer();
-            auto ep = socket_.remote_endpoint(err);
-            auto ip = err ? "null" : ep.address().to_string();
-            spdlog::warn("async_read faild:{}, {}. http{}://{}({}):{}@{}", ec.value(), ec.message(),
-                ssocket_ ? "s" : "",
-                host_, ip, port_, static_cast<void*>(this));
-        } while (false);
-
-        finish(asio::error_code());
-    }
-#endif
-    else
-    {
-        finish(ec, "async_read");
-    }
+    return content_length;
 }
 
 void HTTPRequest::finish(const std::error_code& ec, std::string msg)
@@ -627,16 +454,22 @@ void HTTPRequest::cancel()
 #if !defined(_WIN32_WINNT) || _WIN32_WINNT <= 0x502 // Windows Server 2003 or earlier.
     spdlog::warn("Not implemented '{}' in Windows Server 2003 or earlier.", __FUNCTION__);
 #else
-    unique_lock<mutex> ulk(cancel_mutex_);
-    was_cancel_ = true;
-    resolver_.cancel();
-    // 二选一
-    assert((nullptr == ssocket_) != (nullptr == insocket_));
-    auto & socket_ = ssocket_ ? ssocket_->lowest_layer() : *insocket_;
-    if (socket_.is_open())
-    {
-        socket_.cancel();
-    }
+    std::weak_ptr<HTTPRequest> wptr = shared_from_this();
+    asio::post(ioc_, [this, wptr]() {
+        if (auto ptr = wptr.lock())
+        {
+            was_cancel_ = true;
+            resolver_.cancel();
+            // 二选一
+            assert((nullptr == ssocket_) != (nullptr == insocket_));
+            auto & socket_ = ssocket_ ? ssocket_->lowest_layer() : *insocket_;
+            if (socket_.is_open())
+            {
+                socket_.cancel();
+                socket_.close();
+            }
+        }
+    });
 #endif
 }
 
