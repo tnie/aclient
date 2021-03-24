@@ -142,9 +142,9 @@ void use_coro_handler(asio::io_context& ioc, asio::steady_timer& task)
 int main()
 {
     spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%t] [%^%l%$] %v");
-    asio::io_context ioc{ 1 };
+    asio::io_context ioc{ 1 }, iox{ 1 };
     //存在 signals 所以不需要 guard，两者二选一
-    std::unique_ptr<asio::executor_work_guard<decltype(ioc.get_executor())> > guard = nullptr;
+    std::unique_ptr<asio::executor_work_guard<decltype(ioc.get_executor())> > guard = nullptr, guard2;
     // CTRL-C
     std::unique_ptr<asio::signal_set> signals = nullptr;
     if (false) {
@@ -156,11 +156,17 @@ int main()
     }
     else {
         guard.reset(new asio::executor_work_guard<decltype(ioc.get_executor())>{ ioc.get_executor() });
+        guard2.reset(new asio::executor_work_guard<decltype(iox.get_executor())>{ iox.get_executor() });
     }
     std::thread running(
         [&ioc]() {
         size_t num = ioc.run();
-        spdlog::info("{} handlers were executed", num);
+        spdlog::info("ioc {} handlers were executed", num);
+    });
+    std::thread running2(
+        [&iox]() {
+        size_t num = iox.run();
+        spdlog::info("iox {} handlers were executed", num);
     });
     // 保证在 mgr 之后再释放 &&
     asio::steady_timer task(ioc, 1s);
@@ -175,12 +181,21 @@ int main()
             ptr->join();
         }
     });
+    auto mgr2 = std::shared_ptr<std::thread>(&running2,
+        [&guard2](std::thread * ptr) {
+        if (guard2) {
+            guard2->reset(); // not reset() ptr
+        }
+        if (ptr && ptr->joinable()) {
+            ptr->join();
+        }
+    });
     // do something
     //deconstruction(ioc);
     //completes_immediately(ioc);
     //common(task);
     //auto f = ::use_future(task);
-    use_coro_handler(ioc, task);
+    use_coro(iox, task);
     this_thread::sleep_for(100ms);
     //task.cancel();
     return 0;
