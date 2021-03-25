@@ -9,6 +9,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "use_timer", "use_timer\use_
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "echo_server", "echo_server\echo_server.vcxproj", "{931EF25F-3AC3-483B-AB02-5053D0E66FD9}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "echo_callback", "echo_callback\echo_callback.vcxproj", "{041AAE87-7366-4362-82CD-2628710DE7A2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
@@ -27,6 +29,10 @@ Global
 		{931EF25F-3AC3-483B-AB02-5053D0E66FD9}.Debug|x86.Build.0 = Debug|Win32
 		{931EF25F-3AC3-483B-AB02-5053D0E66FD9}.Release|x86.ActiveCfg = Release|Win32
 		{931EF25F-3AC3-483B-AB02-5053D0E66FD9}.Release|x86.Build.0 = Release|Win32
+		{041AAE87-7366-4362-82CD-2628710DE7A2}.Debug|x86.ActiveCfg = Debug|Win32
+		{041AAE87-7366-4362-82CD-2628710DE7A2}.Debug|x86.Build.0 = Debug|Win32
+		{041AAE87-7366-4362-82CD-2628710DE7A2}.Release|x86.ActiveCfg = Release|Win32
+		{041AAE87-7366-4362-82CD-2628710DE7A2}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
