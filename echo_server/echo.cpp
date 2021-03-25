@@ -3,6 +3,8 @@
 #include <asio.hpp>
 using namespace asio;
 
+long g_count = 0;
+
 awaitable<void> echo(asio::ip::tcp::socket socket)
 {
     try
@@ -19,7 +21,8 @@ awaitable<void> echo(asio::ip::tcp::socket socket)
     catch (const std::exception& e)
     {
         // 比如断开连接
-        spdlog::warn(e.what());
+        spdlog::warn("{}  {}", e.what(), --g_count);
+
     }
 }
 
@@ -31,7 +34,7 @@ awaitable<void> listener()
     tcp::acceptor acceptor(executor, { tcp::v4(), 55555 });
     while (true)
     {
-        spdlog::info("waiting for someone connect ...");
+        spdlog::info("waiting for someone connect {}...", ++g_count);
         tcp::socket socket = co_await acceptor.async_accept(asio::use_awaitable);
         try
         {
