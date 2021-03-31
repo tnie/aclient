@@ -2,6 +2,7 @@
 #include <iostream>
 #include <cassert>
 
+// 作为协程的返回值，用于 caller 与协程交互。自定义类型，样板代码不会使用。
 class resumable {
 public:
     struct promise_type {   // 类名与接口名称是固定的，样板代码需要使用
@@ -18,8 +19,14 @@ public:
             return std::experimental::suspend_always();
         }
         //void return_void() {}
+        //co_return 表达式调用
         void return_value(const char* string) {
             string_ = string;
+        }
+        //co_yield 表达式调用
+        auto yield_value(const char* string) {
+            string_ = string;
+            return std::experimental::suspend_always();
         }
         void unhandled_exception() {
             std::terminate();
@@ -37,6 +44,9 @@ public:
         return ! handle_.done();
     }
     const char* return_val() {
+        return handle_.promise().string_;
+    }
+    const char* recent_val() {
         return handle_.promise().string_;
     }
     ~resumable() { handle_.destroy(); }
