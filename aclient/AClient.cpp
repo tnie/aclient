@@ -153,16 +153,16 @@ void HTTPRequest::execute()
     assert(host_.empty() == false);
     if (request_.empty())
     {
-    string etag;
-    if (task_.need_etag())
-    {
-        auto url = task_.get_url(host_, port_, (insocket_ == nullptr));
-        if (!url.empty())
+        string etag;
+        if (task_.need_etag())
         {
+            auto url = task_.get_url(host_, port_, (insocket_ == nullptr));
+            if (!url.empty())
+            {
                 // 从本地缓存等位置读出
                 //etag = AClientOper::getInstance().get_etag(url);
+            }
         }
-    }
         request_ = task_.request_msg(host_, port_, etag);
     }
     assert(request_.empty() == false);
