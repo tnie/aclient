@@ -17,6 +17,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "simplest_coro", "simplest_c
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "echo_client", "echo_client\echo_client.vcxproj", "{6733C83B-135F-4373-90D3-07FFFD4DC613}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "learn_beast", "learn_beast\learn_beast.vcxproj", "{4149C070-DD5F-423A-A954-991050D370C2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
@@ -51,6 +53,10 @@ Global
 		{6733C83B-135F-4373-90D3-07FFFD4DC613}.Debug|x86.Build.0 = Debug|Win32
 		{6733C83B-135F-4373-90D3-07FFFD4DC613}.Release|x86.ActiveCfg = Release|Win32
 		{6733C83B-135F-4373-90D3-07FFFD4DC613}.Release|x86.Build.0 = Release|Win32
+		{4149C070-DD5F-423A-A954-991050D370C2}.Debug|x86.ActiveCfg = Debug|Win32
+		{4149C070-DD5F-423A-A954-991050D370C2}.Debug|x86.Build.0 = Debug|Win32
+		{4149C070-DD5F-423A-A954-991050D370C2}.Release|x86.ActiveCfg = Release|Win32
+		{4149C070-DD5F-423A-A954-991050D370C2}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
