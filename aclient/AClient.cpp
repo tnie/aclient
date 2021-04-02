@@ -173,7 +173,7 @@ void HTTPRequest::execute()
     using asio::ip::tcp;
     asio::co_spawn(ioc_, [this, self = shared_from_this()]()->asio::awaitable<void> {
         auto token = asio::use_awaitable;
-        asio::executor executor = co_await asio::this_coro::executor;
+        auto executor = co_await asio::this_coro::executor;
         try
         {
             auto endpoints = co_await resolver_.async_resolve(tcp::v4(), host_, std::to_string(port_), token);
