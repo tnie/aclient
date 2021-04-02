@@ -13,7 +13,7 @@
 //
 //------------------------------------------------------------------------------
 
-#include "example/common/root_certificates.hpp"
+//#include "example/common/root_certificates.hpp"
 
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
@@ -223,10 +223,10 @@ int main(int argc, char** argv)
     ssl::context ctx{ ssl::context::tlsv12_client };
 
     // This holds the root certificate used for verification
-    load_root_certificates(ctx);
+    //load_root_certificates(ctx);
 
     // Verify the remote server's certificate
-    ctx.set_verify_mode(ssl::verify_peer);
+    //ctx.set_verify_mode(ssl::verify_peer);
 
     // Launch the asynchronous operation
     // The session is constructed with a strand to
