@@ -178,13 +178,13 @@ void HTTPRequest::execute()
         return;
     }
     using asio::ip::tcp;
-    resolver_.async_resolve(tcp::v4(), host_, std::to_string(port_), [this, self = shared_from_this()](asio::error_code ec, tcp::resolver::results_type ep) {
+    resolver_.async_resolve(tcp::v4(), host_, std::to_string(port_), [this, self = shared_from_this()](boost::system::error_code ec, tcp::resolver::results_type ep) {
         self;
         handle_resolve(ec, ep);
     });
 }
 
-void HTTPRequest::handle_resolve(asio::error_code ec, asio::ip::tcp::resolver::results_type endpoints)
+void HTTPRequest::handle_resolve(boost::system::error_code ec, asio::ip::tcp::resolver::results_type endpoints)
 {
     using asio::ip::tcp;
     if (ec)
@@ -202,13 +202,13 @@ void HTTPRequest::handle_resolve(asio::error_code ec, asio::ip::tcp::resolver::r
     // 二选一
     assert((nullptr == ssocket_) != (nullptr == insocket_));
     auto & socket_ = ssocket_ ? ssocket_->lowest_layer() : *insocket_;
-    async_connect(socket_, endpoints, [this, self = shared_from_this()](asio::error_code ec, tcp::endpoint ep) {
+    async_connect(socket_, endpoints, [this, self = shared_from_this()](boost::system::error_code ec, tcp::endpoint ep) {
         self;
         handle_connect(ec);
     });
 }
 
-void HTTPRequest::handle_connect(asio::error_code ec)
+void HTTPRequest::handle_connect(boost::system::error_code ec)
 {
     if (ec)
     {
@@ -240,20 +240,20 @@ void HTTPRequest::handle_connect(asio::error_code ec)
     if (insocket_)
     {
         auto & socket_ = *insocket_;
-        asio::async_write(socket_, asio::buffer(request_), [this, self = shared_from_this()](asio::error_code ec, std::size_t len) {
+        asio::async_write(socket_, asio::buffer(request_), [this, self = shared_from_this()](boost::system::error_code ec, std::size_t len) {
             handle_write(ec, len);
         });
         assert(ssocket_ == nullptr);
     }
     else if (ssocket_)
     {
-        ssocket_->async_handshake(asio::ssl::stream_base::client, [this, self = shared_from_this()](asio::error_code ec){
+        ssocket_->async_handshake(asio::ssl::stream_base::client, [this, self = shared_from_this()](boost::system::error_code ec){
             handle_handshake(ec);
         });
     }
 }
 
-void HTTPRequest::handle_handshake(asio::error_code ec)
+void HTTPRequest::handle_handshake(boost::system::error_code ec)
 {
     // http 通信不应进入此函数
     assert(nullptr == insocket_);
@@ -273,7 +273,7 @@ void HTTPRequest::handle_handshake(asio::error_code ec)
     // 二选一
     if (ssocket_)
     {
-        asio::async_write(*ssocket_, asio::buffer(request_), [this, self = shared_from_this()](asio::error_code ec, std::size_t len) {
+        asio::async_write(*ssocket_, asio::buffer(request_), [this, self = shared_from_this()](boost::system::error_code ec, std::size_t len) {
             handle_write(ec, len);
         });
         assert(insocket_ == nullptr);
@@ -284,7 +284,7 @@ void HTTPRequest::handle_handshake(asio::error_code ec)
     }
 }
 
-void HTTPRequest::handle_write(asio::error_code ec, std::size_t len)
+void HTTPRequest::handle_write(boost::system::error_code ec, std::size_t len)
 {
     if (ec)
     {
@@ -304,7 +304,7 @@ void HTTPRequest::handle_write(asio::error_code ec, std::size_t len)
     {
         if (ssocket_)
         {
-            asio::async_read_until(*ssocket_, response_.get_response_buf(), "\r\n", [this, self = shared_from_this()](asio::error_code ec, std::size_t len) {
+            asio::async_read_until(*ssocket_, response_.get_response_buf(), "\r\n", [this, self = shared_from_this()](boost::system::error_code ec, std::size_t len) {
                 handle_read_status_line(ec, len);
             });
             assert(insocket_ == nullptr);
@@ -312,13 +312,13 @@ void HTTPRequest::handle_write(asio::error_code ec, std::size_t len)
         }
         else if (insocket_)
         {
-            asio::async_read_until(*insocket_, response_.get_response_buf(), "\r\n", [this, self = shared_from_this()](asio::error_code ec, std::size_t len) {
+            asio::async_read_until(*insocket_, response_.get_response_buf(), "\r\n", [this, self = shared_from_this()](boost::system::error_code ec, std::size_t len) {
                 handle_read_status_line(ec, len);
             });
         }
     }
 }
-void HTTPRequest::handle_read_status_line(asio::error_code ec, std::size_t)
+void HTTPRequest::handle_read_status_line(boost::system::error_code ec, std::size_t)
 {
     if (ec)
     {
@@ -337,6 +337,7 @@ void HTTPRequest::handle_read_status_line(asio::error_code ec, std::size_t)
     catch (const std::exception&)
     {
         spdlog::error("Invalid response. {}", task_.page());
+        std::error_code;
         finish(http_errors::invalid_response);
         return;
     }
@@ -372,21 +373,21 @@ void HTTPRequest::handle_read_status_line(asio::error_code ec, std::size_t)
     }
     if (ssocket_)    // 二选一
     {
-        asio::async_read_until(*ssocket_, response_.get_response_buf(), "\r\n\r\n", [this, self = shared_from_this()](asio::error_code ec, std::size_t len) {
+        asio::async_read_until(*ssocket_, response_.get_response_buf(), "\r\n\r\n", [this, self = shared_from_this()](boost::system::error_code ec, std::size_t len) {
             handle_read_headers(ec, len);
         });
         assert(insocket_ == nullptr);
     }
     else if (insocket_)
     {
-        asio::async_read_until(*insocket_, response_.get_response_buf(), "\r\n\r\n", [this, self = shared_from_this()](asio::error_code ec, std::size_t len) {
+        asio::async_read_until(*insocket_, response_.get_response_buf(), "\r\n\r\n", [this, self = shared_from_this()](boost::system::error_code ec, std::size_t len) {
             handle_read_headers(ec, len);
         });
     }
 
 }
 
-void HTTPRequest::handle_read_headers(asio::error_code ec, std::size_t)
+void HTTPRequest::handle_read_headers(boost::system::error_code ec, std::size_t)
 {
     if (ec)
     {
@@ -443,7 +444,7 @@ void HTTPRequest::handle_read_headers(asio::error_code ec, std::size_t)
         if (ssocket_)    // 二选一
         {
             asio::async_read(*ssocket_, response_.get_response_buf(), asio::transfer_all(),
-                [this, self = shared_from_this()](asio::error_code err, std::size_t len) {
+                [this, self = shared_from_this()](boost::system::error_code err, std::size_t len) {
                 handle_read_content(err, len);
             });
             assert(nullptr == insocket_);
@@ -451,7 +452,7 @@ void HTTPRequest::handle_read_headers(asio::error_code ec, std::size_t)
         else if (insocket_)
         {
             asio::async_read(*insocket_, response_.get_response_buf(), asio::transfer_all(),
-                [this, self = shared_from_this()](asio::error_code err, std::size_t len) {
+                [this, self = shared_from_this()](boost::system::error_code err, std::size_t len) {
                 handle_read_content(err, len);
             });
         }
@@ -463,7 +464,7 @@ void HTTPRequest::handle_read_headers(asio::error_code ec, std::size_t)
         if (ssocket_)    // 二选一
         {
             asio::async_read(*ssocket_, response_.get_response_buf(), asio::transfer_at_least(content_length - size),
-                [this, self = shared_from_this()](asio::error_code err, std::size_t len) {
+                [this, self = shared_from_this()](boost::system::error_code err, std::size_t len) {
                 handle_read_content(err, len);
             });
             assert(nullptr == insocket_);
@@ -471,7 +472,7 @@ void HTTPRequest::handle_read_headers(asio::error_code ec, std::size_t)
         else if (insocket_)
         {
             asio::async_read(*insocket_, response_.get_response_buf(), asio::transfer_at_least(content_length - size),
-                [this, self = shared_from_this()](asio::error_code err, std::size_t len) {
+                [this, self = shared_from_this()](boost::system::error_code err, std::size_t len) {
                 handle_read_content(err, len);
             });
         }
@@ -479,11 +480,11 @@ void HTTPRequest::handle_read_headers(asio::error_code ec, std::size_t)
     }
 }
 
-void HTTPRequest::handle_read_content(asio::error_code ec, std::size_t)
+void HTTPRequest::handle_read_content(boost::system::error_code ec, std::size_t)
 {
     if (asio::error::eof/*2*/ == ec)
     {
-        finish(asio::error_code());
+        finish(boost::system::error_code());
     }
 #if _WIN32_WINNT>=0x0600 && SSL_R_SHORT_READ   // 细节见《short read workaround.md》
     // TODO maybe incorrect?
@@ -492,7 +493,7 @@ void HTTPRequest::handle_read_content(asio::error_code ec, std::size_t)
         // -> not a real error, just a normal TLS shutdown
         do
         {
-            asio::error_code err;
+            boost::system::error_code err;
             assert(nullptr != ssocket_);
             auto & socket_ = ssocket_->lowest_layer();
             auto ep = socket_.remote_endpoint(err);
@@ -502,7 +503,7 @@ void HTTPRequest::handle_read_content(asio::error_code ec, std::size_t)
                 host_, ip, port_, static_cast<void*>(this));
         } while (false);
 
-        finish(asio::error_code());
+        finish(boost::system::error_code());
     }
 #endif
     else
@@ -511,12 +512,12 @@ void HTTPRequest::handle_read_content(asio::error_code ec, std::size_t)
     }
 }
 
-void HTTPRequest::finish(const std::error_code& ec, std::string msg)
+void HTTPRequest::finish(const boost::system::error_code& ec, std::string msg)
 {
     std::string ip;
     if (ip.empty())
     {
-        asio::error_code err;
+        boost::system::error_code err;
         // 二选一
         assert((nullptr == ssocket_) != (nullptr == insocket_));
         auto & socket_ = ssocket_ ? ssocket_->lowest_layer() : *insocket_;
@@ -645,7 +646,7 @@ void HTTPRequest::set_callback(Callback hl)
     handler_ = hl;
 }
 
-void handle_error(asio::error_code ec, const std::string& msg)
+void handle_error(boost::system::error_code ec, const std::string& msg)
 {
     if ((asio::error::bad_descriptor/*10009*/ == ec) ||
         (asio::error::connection_aborted/*10053*/ == ec) ||

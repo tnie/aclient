@@ -4,13 +4,17 @@
 #endif // !ASIO_NO_DEPRECATED
 
 #include <fstream>
-#include <asio.hpp>
-#include <asio/ssl.hpp>
+#include <boost\asio.hpp>
+#include <boost\asio\ssl.hpp>
 #include <iostream>
 #include <spdlog\spdlog.h>
 #include <queue>
 #include <map>
 #include "Utility.h"
+
+namespace asio = boost::asio;
+//using error_code = boost::system::error_code;  // std::error_code
+//using error_code = boost::system::error_code;
 
 class HTTPRequest;
 class HTTPResponse final
@@ -123,16 +127,17 @@ public:
     virtual void execute();
     virtual void cancel();
 private:
-    void handle_resolve(asio::error_code, asio::ip::tcp::resolver::results_type endpoints);
-    void handle_connect(asio::error_code ec);
-    void handle_handshake(asio::error_code ec);
-    void handle_write(asio::error_code ec, std::size_t len);
-    void handle_read_status_line(asio::error_code ec, std::size_t);
-    void handle_read_headers(asio::error_code err, std::size_t);
-    void handle_read_content(asio::error_code err, std::size_t);
+    boost::system::error_code ec_;
+    void handle_resolve(boost::system::error_code, asio::ip::tcp::resolver::results_type endpoints);
+    void handle_connect(boost::system::error_code ec);
+    void handle_handshake(boost::system::error_code ec);
+    void handle_write(boost::system::error_code ec, std::size_t len);
+    void handle_read_status_line(boost::system::error_code ec, std::size_t);
+    void handle_read_headers(boost::system::error_code err, std::size_t);
+    void handle_read_content(boost::system::error_code err, std::size_t);
     // 如果通信时采用了 gzip 压缩，解压缩并回写（buf 和 size）
     void handle_gzip();
-    void finish(const std::error_code&, std::string msg = "");
+    void finish(const boost::system::error_code&, std::string msg = "");
 private:
     std::string host_;
     unsigned port_;

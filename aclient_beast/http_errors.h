@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include <string>
+#include <boost\system\error_code.hpp>
 
 namespace http_errors
 {
@@ -8,8 +9,23 @@ namespace http_errors
         // 不能使用默认的零。错误码体系中，零表示 no error
         invalid_response = 1
     };
+}
 
-    class http_errors_category : public std::error_category
+namespace boost
+{
+    namespace system
+    {
+        template<>
+        struct is_error_code_enum<http_errors::http_error_codes> : public true_type
+        {
+
+        };
+    }
+}
+
+namespace http_errors
+{
+    class http_errors_category : public boost::system::error_category
     {
     public:
         const char* name() const noexcept override
@@ -30,23 +46,14 @@ namespace http_errors
         }
     };
 
-    const std::error_category& get_http_errors_category()
+    const boost::system::error_category& get_http_errors_category()
     {
         static http_errors_category cat;
         return cat;
     }
 
-    std::error_code make_error_code(http_error_codes e)
+    boost::system::error_code make_error_code(http_error_codes e)
     {
-        return std::error_code(e, get_http_errors_category());
+        return boost::system::error_code(e, get_http_errors_category());
     }
-}
-
-namespace std
-{
-    template<>
-    struct is_error_code_enum<http_errors::http_error_codes> : public true_type
-    {
-
-    };
 }
