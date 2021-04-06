@@ -26,82 +26,6 @@ void default_handler(const HTTPRequest& request, HTTPResponse& response, const s
     return;
 }
 
-std::string task_t::request_msg(const std::string& host, unsigned port, const std::string& etag /*= ""*/) const
-{
-    assert(host.empty() == false);
-    assert(port > 0);
-    assert(page_.empty() == false);
-    std::ostringstream oss;
-    if (isPostTask() == false)
-    {
-        oss << "GET " << page_ << " HTTP/1.0\r\n";
-        oss << "Host: " << host << ":" << port << "\r\n";
-        if (etag.size() && need_etag())
-        {
-            //oss << "If-Modified-Since: " << lm << "\n";
-            oss << "If-None-Match: " << etag << "\r\n";
-        }
-        //oss << "Connection: keep-alive\r\n";
-        //oss << "Connection: close\r\n";
-        //oss << "Accept-Encoding: identity\r\n";    // 暂时禁止压缩算法
-        oss << "Accept-Encoding: gzip\r\n";         // 启用 gzip 压缩
-        for (const auto& header : headers_)
-        {
-            oss << header << "\r\n";
-        }
-        oss << "\r\n";
-    }
-    else
-    {
-        oss << "POST " << page_ << " HTTP/1.0\r\n";
-        oss << "Host: " << host << ":" << port << "\r\n";
-        oss << "Accept: */*\r\n";
-        oss << "Content-Length: " << data_.length() << "\r\n";
-        //oss << "Content-Type: application/x-www-form-urlencoded\r\n";
-        for (const auto& header : headers_)
-        {
-            oss << header << "\r\n";
-        }
-        oss << "Connection: close\r\n\r\n";
-        oss << data_;
-    }
-    return oss.str();
-}
-
-void task_t::set_data(std::string data)
-{
-    if (data.empty())
-    {
-        // isPostTask() 存在缺陷，借此修正
-        // TODO
-        data.append("POST");
-    }
-    data_.swap(data);
-    etag_ = false;
-}
-
-void task_t::add_header(const std::string& h)
-{
-    assert(h.find(":") != std::string::npos);
-    assert(h.find("\r") == std::string::npos);
-    assert(h.find("\n") == std::string::npos);
-    headers_.push_back(h);
-}
-
-std::string task_t::get_url(const std::string& host, unsigned port /*= 80*/, bool https/*= false*/) const
-{
-    if (isPostTask())
-    {
-        return "";
-    }
-    return fmt::format("http{}://{}:{}/{}", (https ? "s": ""), host, port, page_);
-}
-
-void task_t::enable_etag()
-{
-    etag_ = !isPostTask();
-}
-
 void HTTPRequest::set_host(std::string host, unsigned port)
 {
     if (host.find("https://") != std::string::npos)
@@ -110,7 +34,7 @@ void HTTPRequest::set_host(std::string host, unsigned port)
         ctx_ = std::make_shared<asio::ssl::context>(asio::ssl::context::sslv23_client);
         if (ctx_)
         {
-            ssocket_ = std::make_shared<asio::ssl::stream<asio::ip::tcp::socket>>(ioc_, *ctx_);
+            ssocket_ = std::make_shared<beast::ssl_stream<beast::tcp_stream>>(ioc_, *ctx_);
             if (ssocket_)
             {
                 insocket_.reset();
@@ -122,7 +46,7 @@ void HTTPRequest::set_host(std::string host, unsigned port)
     }
     else
     {
-        insocket_ = std::make_shared<asio::ip::tcp::socket>(ioc_);
+        insocket_ = std::make_shared<beast::tcp_stream>(ioc_);
         if (insocket_)
         {
             ssocket_.reset();
@@ -138,34 +62,31 @@ void HTTPRequest::set_host(std::string host, unsigned port)
         }
         port_ = port > 0 ? port : DEFAULT_PORT;
     }
-
 }
 
 void HTTPRequest::set_task(task_t task)
 {
     swap(task, task_);
-    request_.clear();
 }
 
 void HTTPRequest::execute()
 {
     assert(port_ > 0);
     assert(host_.empty() == false);
-    if (request_.empty())
-    {
-        string etag;
-        if (task_.need_etag())
-        {
-            auto url = task_.get_url(host_, port_, (insocket_ == nullptr));
-            if (!url.empty())
-            {
-                // 从本地缓存等位置读出
-                //etag = AClientOper::getInstance().get_etag(url);
-            }
-        }
-        request_ = task_.request_msg(host_, port_, etag);
-    }
-    assert(request_.empty() == false);
+    //if (request_.empty())
+    //{
+    //    string etag;
+    //    if (task_.need_etag())
+    //    {
+    //        auto url = task_.get_url(host_, port_, (insocket_ == nullptr));
+    //        if (!url.empty())
+    //        {
+    //            // 从本地缓存等位置读出
+    //            //etag = AClientOper::getInstance().get_etag(url);
+    //        }
+    //    }
+    //    request_ = task_.request_msg(host_, port_, etag);
+    //}
     assert((ctx_ == nullptr) == (ssocket_ == nullptr));
     assert((insocket_ == nullptr) != (ssocket_ == nullptr));
 
@@ -201,8 +122,8 @@ void HTTPRequest::handle_resolve(boost::system::error_code ec, asio::ip::tcp::re
     }
     // 二选一
     assert((nullptr == ssocket_) != (nullptr == insocket_));
-    auto & socket_ = ssocket_ ? ssocket_->lowest_layer() : *insocket_;
-    async_connect(socket_, endpoints, [this, self = shared_from_this()](boost::system::error_code ec, tcp::endpoint ep) {
+    auto & socket_ = ssocket_ ? beast::get_lowest_layer(*ssocket_) : *insocket_;
+    socket_.async_connect(endpoints, [this, self = shared_from_this()](boost::system::error_code ec, tcp::endpoint ep) {
         self;
         handle_connect(ec);
     });
@@ -215,20 +136,20 @@ void HTTPRequest::handle_connect(boost::system::error_code ec)
         finish(ec);
         return;
     }
-    if (request_.empty())
-    {
-        string etag;
-        if (task_.need_etag())
-        {
-            auto url = task_.get_url(host_, port_, (insocket_ == nullptr));
-            if (!url.empty())
-            {
-                // 从本地缓存等位置读出
-                //etag = AClientOper::getInstance().get_etag(url);
-            }
-        }
-        request_ = task_.request_msg(host_, port_, etag);
-    }
+    //if (request_.empty())
+    //{
+    //    string etag;
+    //    if (task_.need_etag())
+    //    {
+    //        auto url = task_.get_url(host_, port_, (insocket_ == nullptr));
+    //        if (!url.empty())
+    //        {
+    //            // 从本地缓存等位置读出
+    //            //etag = AClientOper::getInstance().get_etag(url);
+    //        }
+    //    }
+    //    request_ = task_.request_msg(host_, port_, etag);
+    //}
     std::unique_lock<mutex> ulk(cancel_mutex_);
     if (was_cancel_)
     {
@@ -240,7 +161,7 @@ void HTTPRequest::handle_connect(boost::system::error_code ec)
     if (insocket_)
     {
         auto & socket_ = *insocket_;
-        asio::async_write(socket_, asio::buffer(request_), [this, self = shared_from_this()](boost::system::error_code ec, std::size_t len) {
+        http::async_write(socket_, task_, [this, self = shared_from_this()](boost::system::error_code ec, std::size_t len) {
             handle_write(ec, len);
         });
         assert(ssocket_ == nullptr);
@@ -273,7 +194,7 @@ void HTTPRequest::handle_handshake(boost::system::error_code ec)
     // 二选一
     if (ssocket_)
     {
-        asio::async_write(*ssocket_, asio::buffer(request_), [this, self = shared_from_this()](boost::system::error_code ec, std::size_t len) {
+        http::async_write(*ssocket_, task_, [this, self = shared_from_this()](boost::system::error_code ec, std::size_t len) {
             handle_write(ec, len);
         });
         assert(insocket_ == nullptr);
@@ -300,7 +221,7 @@ void HTTPRequest::handle_write(boost::system::error_code ec, std::size_t len)
         finish(asio::error::operation_aborted);
         return;
     }
-    if (request_.size() == len)
+    //if (request_.size() == len)
     {
         if (ssocket_)
         {
@@ -336,7 +257,7 @@ void HTTPRequest::handle_read_status_line(boost::system::error_code ec, std::siz
     }
     catch (const std::exception&)
     {
-        spdlog::error("Invalid response. {}", task_.page());
+        spdlog::error("Invalid response. {}", task_.base().target().data());
         std::error_code;
         finish(http_errors::invalid_response);
         return;
@@ -344,18 +265,18 @@ void HTTPRequest::handle_read_status_line(boost::system::error_code ec, std::siz
     response_.set_status_code(status_code, Passkey<HTTPRequest>());
     if (!response_stream || http_version.substr(0, 5) != "HTTP/")
     {
-        spdlog::error("Invalid response. {}", task_.page());
+        spdlog::error("Invalid response. {}", task_.base().target().data());
         finish(http_errors::invalid_response);
         return;
     }
     else if (status_code == 304)
     {
-        spdlog::debug("Not modified. {}", task_.page());
+        spdlog::debug("Not modified. {}", task_.base().target().data());
         // 如果要复用 socket，已接收的缓存以及 flying 的数据都需要处理
     }
     else if (status_code != 200)
     {
-        spdlog::warn("Response returned with status code {}. {}", status_code, task_.page());
+        spdlog::warn("Response returned with status code {}. {}", status_code, task_.base().target().data());
     }
     std::string status_message;
     std::getline(response_stream, status_message, '\r');
@@ -418,7 +339,7 @@ void HTTPRequest::handle_read_headers(boost::system::error_code ec, std::size_t)
     }
     if (200 == response_.get_status_code())
     {
-        spdlog::info("Content-length of {}'s response is {}.", task_.page(), content_length);
+        spdlog::info("Content-length of {}'s response is {}.", task_.base().target().data(), content_length);
     }
 
     std::unique_lock<mutex> ulk(cancel_mutex_);
@@ -431,15 +352,15 @@ void HTTPRequest::handle_read_headers(boost::system::error_code ec, std::size_t)
     // Start reading remaining data .
     if (content_length < 0)
     {
-        const std::string conn("keep-alive");
-        if (request_.find(conn) != std::string::npos)
+
+        if (task_.find(http::field::keep_alive) != task_.cend())
         {
             // 与 keep-alive 冲突：如果启用了 keep-alive 属性，会死等，巨慢
-            spdlog::error("'{}' response has no 'Content-Length'.", task_.page());
+            spdlog::error("'{}' response has no 'Content-Length'.", task_.base().target().data());
         }
         else
         {
-            spdlog::info("'{}' response has no 'Content-Length'.", task_.page());
+            spdlog::info("'{}' response has no 'Content-Length'.", task_.base().target().data());
         }
         if (ssocket_)    // 二选一
         {
@@ -460,7 +381,7 @@ void HTTPRequest::handle_read_headers(boost::system::error_code ec, std::size_t)
     else
     {
         auto size = response_.get_response_buf().size();
-        spdlog::info("'{}' read {} bytes at least.", task_.page(), content_length - size);
+        spdlog::info("'{}' read {} bytes at least.", task_.base().target().data(), content_length - size);
         if (ssocket_)    // 二选一
         {
             asio::async_read(*ssocket_, response_.get_response_buf(), asio::transfer_at_least(content_length - size),
@@ -520,8 +441,8 @@ void HTTPRequest::finish(const boost::system::error_code& ec, std::string msg)
         boost::system::error_code err;
         // 二选一
         assert((nullptr == ssocket_) != (nullptr == insocket_));
-        auto & socket_ = ssocket_ ? ssocket_->lowest_layer() : *insocket_;
-        auto ep = socket_.remote_endpoint(err);
+        auto & socket_ = ssocket_ ? beast::get_lowest_layer(*ssocket_) : *insocket_;
+        auto ep = socket_.socket().remote_endpoint(err);
         ip = err ? "null" : ep.address().to_string();
     }
     if (ec && (ec.value() != asio::error::operation_aborted))
@@ -552,7 +473,7 @@ void HTTPRequest::finish(const boost::system::error_code& ec, std::string msg)
             if (!ec)
             {
                 auto status_code = response_.get_status_code();
-                const string url = task_.get_url(host_, port_, ssocket_ != nullptr);
+                //const string url = task_.get_url(host_, port_, ssocket_ != nullptr);
                 auto &buf = response_.get_response_buf();
                 const auto size = buf.size();
                 if (304 == status_code)
@@ -568,20 +489,20 @@ void HTTPRequest::finish(const boost::system::error_code& ec, std::string msg)
                         assert(s2 == length);
                     }
                 }
-                else if (200 == status_code && task_.need_etag())
-                {
-                    const string etag = response_.get_etag();
-                    auto   buffer = std::shared_ptr<char>(new char[size], [](char* p) {
-                        delete[] p;
-                    });
-                    auto s2 = buf.sgetn(buffer.get(), size);
-                    spdlog::info("{} (with {} @{}): {}/{} -> buffer", task_.page(), etag, ip, s2, size);
-                    //更新到本地缓存等位置
-                    //AClientOper::getInstance().update(url, etag, buffer, size);
-                    // response_ has nothing. rewrite
-                    assert(buf.size() == 0);
-                    buf.sputn(buffer.get(), size);
-                }
+                //else if (200 == status_code && task_.need_etag())
+                //{
+                //    const string etag = response_.get_etag();
+                //    auto   buffer = std::shared_ptr<char>(new char[size], [](char* p) {
+                //        delete[] p;
+                //    });
+                //    auto s2 = buf.sgetn(buffer.get(), size);
+                //    spdlog::info("{} (with {} @{}): {}/{} -> buffer", task_.base().target().data(), etag, ip, s2, size);
+                //    //更新到本地缓存等位置
+                //    //AClientOper::getInstance().update(url, etag, buffer, size);
+                //    // response_ has nothing. rewrite
+                //    assert(buf.size() == 0);
+                //    buf.sputn(buffer.get(), size);
+                //}
             }
 
             handler_(*this, response_, ec);
@@ -601,7 +522,7 @@ void HTTPRequest::handle_gzip()
         std::istream response_stream(&response_.get_response_buf());
         std::istreambuf_iterator<char> eos;
         const string msg = string(std::istreambuf_iterator<char>(response_stream), eos);
-        spdlog::info("Response of {} has 'gzip', and size is {}.", task_.page(), msg.size());
+        spdlog::info("Response of {} has 'gzip', and size is {}.", task_.base().target().data(), msg.size());
         if (gzip::is_compressed(msg.c_str(), msg.size()))
         {
             string content = gzip::decompress(msg.c_str(), msg.size());
@@ -612,12 +533,12 @@ void HTTPRequest::handle_gzip()
                 assert(s2 == size);
                 response_.add_header("content-length", std::to_string(s2), Passkey<HTTPRequest>()); // 更新大小
                 response_.add_header("content-encoding", "", Passkey<HTTPRequest>());   // 抹掉 ‘gzip’
-                spdlog::info("{} override buf & content-length: {} -> buffer.", task_.page(), s2);
+                spdlog::info("{} override buf & content-length: {} -> buffer.", task_.base().target().data(), s2);
             }
         }
         else
         {
-            const string url = task_.get_url(host_, port_, ssocket_ != nullptr);
+            const string url;// = task_.get_url(host_, port_, ssocket_ != nullptr);
             spdlog::error("gzip decompress failed. {}", url);
         }
     }
@@ -633,8 +554,8 @@ void HTTPRequest::cancel()
     resolver_.cancel();
     // 二选一
     assert((nullptr == ssocket_) != (nullptr == insocket_));
-    auto & socket_ = ssocket_ ? ssocket_->lowest_layer() : *insocket_;
-    if (socket_.is_open())
+    auto & socket_ = ssocket_ ? beast::get_lowest_layer(*ssocket_) : *insocket_;
+    if (socket_.socket().is_open())
     {
         socket_.cancel();
     }

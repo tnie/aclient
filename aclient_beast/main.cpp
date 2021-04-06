@@ -5,7 +5,12 @@ int main()
     constexpr unsigned tag = 1;
     auto request = HTTPClient::getInstance().create_request(tag);
     request->set_host("https://www.baidu.com", 443);
-    request->set_task(std::string{ "/" });
+    task_t task;
+    task.method(http::verb::get);
+    task.target("/");
+    //req_.set(http::field::host, host);
+    //task.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+    request->set_task(task);
     request->set_callback([](const HTTPRequest& dummy, HTTPResponse& hr, const std::error_code& ec) {
         if (ec || hr.get_status_code() != 200)
         {

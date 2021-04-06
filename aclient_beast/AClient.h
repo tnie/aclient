@@ -3,6 +3,8 @@
 #define ASIO_NO_DEPRECATED  // 开发时启用。但此宏和 websocketpp 项目不兼容
 #endif // !ASIO_NO_DEPRECATED
 
+#include <boost/beast.hpp>
+#include <boost\beast\ssl.hpp>
 #include <fstream>
 #include <boost\asio.hpp>
 #include <boost\asio\ssl.hpp>
@@ -42,32 +44,9 @@ private:
     asio::streambuf m_response_buf;
 };
 
-class task_t final
-{
-public:
-    task_t() = default;
-    /*explicit*/ task_t(std::string page) : page_(std::move(page)) {};
-    // 改用 POST 方式通信，会覆盖掉 enable_etag() 操作
-    void set_data(std::string data);
-    // 启用 etag，与 set_data() 操作冲突
-    void enable_etag();
-    // 入参应满足 key:value 格式，且不能包含 \r\n
-    void add_header(const std::string& h);
-    //
-    bool isPostTask() const { return !data_.empty(); }
-    const std::string& page() const { return page_; }
-    const std::string& data() const { return data_; }
-    bool need_etag() const { return etag_; }
-    std::string request_msg(const std::string& host, unsigned port, const std::string& etag/* = ""*/) const;
-    // POST 返回空字符串
-    std::string get_url(const std::string& host, unsigned port = 80, bool https= false) const;
-
-private:
-    std::string page_;
-    std::string data_;    // POST: data
-    bool etag_ = false;   // true 建议启用 etag
-    std::vector<std::string> headers_;
-};
+namespace beast = boost::beast;
+namespace http = beast::http;
+using task_t = http::request<http::string_body>;
 
 class HTTPRequest : public std::enable_shared_from_this<HTTPRequest>
 {
@@ -142,7 +121,6 @@ private:
     std::string host_;
     unsigned port_;
     task_t task_;   // 用于扩展 HTTPRequest 的功能
-    std::string request_;
     HTTPResponse response_;
     Callback handler_;
     bool was_cancel_;
@@ -152,9 +130,9 @@ private:
     asio::io_context& ioc_;
     asio::ip::tcp::resolver resolver_;
     // 和 ssocket_(+ctx_) 二选一
-    std::shared_ptr<asio::ip::tcp::socket> insocket_;
+    std::shared_ptr<beast::tcp_stream> insocket_;
     std::shared_ptr<asio::ssl::context> ctx_;    // TODO reference?
-    std::shared_ptr<asio::ssl::stream<asio::ip::tcp::socket>> ssocket_;
+    std::shared_ptr<beast::ssl_stream<beast::tcp_stream>> ssocket_;
 
 };
 
