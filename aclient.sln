@@ -5,6 +5,8 @@ VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "aclient", "aclient\aclient.vcxproj", "{062825EB-6600-446D-95AC-71205196D217}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "aclient_beast", "aclient_beast\aclient_beast.vcxproj", "{E654E8A7-470B-4514-8B39-C3CA816C2887}"
+EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "use_timer", "use_timer\use_timer.vcxproj", "{E632F69B-5B17-412D-96D1-CFB7DD592D91}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "echo_server", "echo_server\echo_server.vcxproj", "{931EF25F-3AC3-483B-AB02-5053D0E66FD9}"
@@ -29,6 +31,10 @@ Global
 		{062825EB-6600-446D-95AC-71205196D217}.Debug|x86.Build.0 = Debug|Win32
 		{062825EB-6600-446D-95AC-71205196D217}.Release|x86.ActiveCfg = Release|Win32
 		{062825EB-6600-446D-95AC-71205196D217}.Release|x86.Build.0 = Release|Win32
+		{E654E8A7-470B-4514-8B39-C3CA816C2887}.Debug|x86.ActiveCfg = Debug|Win32
+		{E654E8A7-470B-4514-8B39-C3CA816C2887}.Debug|x86.Build.0 = Debug|Win32
+		{E654E8A7-470B-4514-8B39-C3CA816C2887}.Release|x86.ActiveCfg = Release|Win32
+		{E654E8A7-470B-4514-8B39-C3CA816C2887}.Release|x86.Build.0 = Release|Win32
 		{E632F69B-5B17-412D-96D1-CFB7DD592D91}.Debug|x86.ActiveCfg = Debug|Win32
 		{E632F69B-5B17-412D-96D1-CFB7DD592D91}.Debug|x86.Build.0 = Debug|Win32
 		{E632F69B-5B17-412D-96D1-CFB7DD592D91}.Release|x86.ActiveCfg = Release|Win32
