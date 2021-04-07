@@ -120,8 +120,9 @@ void HTTPRequest::handle_resolve(boost::system::error_code ec, asio::ip::tcp::re
     }
     // 二选一
     assert((nullptr == ssocket_) != (nullptr == insocket_));
-    auto & socket_ = ssocket_ ? beast::get_lowest_layer(*ssocket_) : *insocket_;
-    socket_.async_connect(endpoints, [this, self = shared_from_this()](boost::system::error_code ec, tcp::endpoint ep) {
+    auto & stream = ssocket_ ? beast::get_lowest_layer(*ssocket_) : *insocket_;
+    stream.expires_after(30s);
+    stream.async_connect(endpoints, [this, self = shared_from_this()](boost::system::error_code ec, tcp::endpoint ep) {
         self;
         handle_connect(ec);
     });
@@ -156,8 +157,8 @@ void HTTPRequest::handle_connect(boost::system::error_code ec)
     // 二选一
     if (insocket_)
     {
-        auto & socket_ = *insocket_;
-        http::async_write(socket_, task_, [this, self = shared_from_this()](boost::system::error_code ec, std::size_t len) {
+        auto & stream = *insocket_;
+        http::async_write(stream, task_, [this, self = shared_from_this()](boost::system::error_code ec, std::size_t len) {
             handle_write(ec, len);
         });
         assert(ssocket_ == nullptr);
