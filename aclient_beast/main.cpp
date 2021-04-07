@@ -1,11 +1,11 @@
 #include "AClient.h"
-
+#include <curl\curl.h>
 int main()
 {
     constexpr unsigned tag = 1;
     auto request = HTTPClient::getInstance().create_request(tag);
     task_t task;
-    task.method(http::verb::get);
+    task.method(http::verb::head);
     task.target("/");
     task.set(http::field::host, "www.baidu.com");
     request->set_task(task);
@@ -21,6 +21,16 @@ int main()
                 spdlog::warn("http[s] failed: status_code[{}]", hr.get_status_code());
             }
             return;
+        }
+        spdlog::info("date is: {}", hr.get_header("date"));
+        auto tt = curl_getdate(hr.get_header("date").c_str(), nullptr);
+        if (tt < 0) {
+            spdlog::warn("curl_getdate failed. {}", hr.get_header("date"));
+        }
+        else {
+            spdlog::info("date is: {}", tt);
+            time_t rawtime = time(nullptr);
+            spdlog::info("loca is: {}", rawtime);
         }
         const std::string gzip = hr.get_header("content-encoding");
         std::istream response_stream(&hr.get_response_buf());
