@@ -108,14 +108,12 @@ void HTTPRequest::execute()
 void HTTPRequest::handle_resolve(boost::system::error_code ec, asio::ip::tcp::resolver::results_type endpoints)
 {
     using asio::ip::tcp;
-    if (ec)
-    {
+    if (ec) {
         finish(ec);
         return;
     }
     std::unique_lock<mutex> ulk(cancel_mutex_);
-    if (was_cancel_)
-    {
+    if (was_cancel_) {
         ulk.unlock();
         finish(asio::error::operation_aborted);
         return;
@@ -131,8 +129,7 @@ void HTTPRequest::handle_resolve(boost::system::error_code ec, asio::ip::tcp::re
 
 void HTTPRequest::handle_connect(boost::system::error_code ec)
 {
-    if (ec)
-    {
+    if (ec) {
         finish(ec);
         return;
     }
@@ -151,8 +148,7 @@ void HTTPRequest::handle_connect(boost::system::error_code ec)
     //    request_ = task_.request_msg(host_, port_, etag);
     //}
     std::unique_lock<mutex> ulk(cancel_mutex_);
-    if (was_cancel_)
-    {
+    if (was_cancel_) {
         ulk.unlock();
         finish(asio::error::operation_aborted);
         return;
@@ -178,19 +174,16 @@ void HTTPRequest::handle_handshake(boost::system::error_code ec)
 {
     // http 通信不应进入此函数
     assert(nullptr == insocket_);
-    if (ec)
-    {
+    if (ec) {
         finish(ec);
         return;
     }
     std::unique_lock<mutex> ulk(cancel_mutex_);
-    if (was_cancel_)
-    {
+    if (was_cancel_) {
         ulk.unlock();
         finish(asio::error::operation_aborted);
         return;
     }
-
     // 二选一
     if (ssocket_)
     {
@@ -207,16 +200,14 @@ void HTTPRequest::handle_handshake(boost::system::error_code ec)
 
 void HTTPRequest::handle_write(boost::system::error_code ec, std::size_t len)
 {
-    if (ec)
-    {
+    if (ec) {
         finish(ec, "async_write");
         return;
     }
     // NOTE 有的服务端在客户端关闭写（继续读）之后，会直接关闭连接
     //socket_.shutdown(asio::socket_base::shutdown_send);
     std::unique_lock<mutex> ulk(cancel_mutex_);
-    if (was_cancel_)
-    {
+    if (was_cancel_) {
         ulk.unlock();
         finish(asio::error::operation_aborted);
         return;
@@ -241,8 +232,7 @@ void HTTPRequest::handle_write(boost::system::error_code ec, std::size_t len)
 }
 void HTTPRequest::handle_read_status_line(boost::system::error_code ec, std::size_t)
 {
-    if (ec)
-    {
+    if (ec) {
         finish(ec, "async_read");
         return;
     }
@@ -286,8 +276,7 @@ void HTTPRequest::handle_read_status_line(boost::system::error_code ec, std::siz
 
     // Read the response headers, which are terminated by a blank line.
     std::unique_lock<mutex> ulk(cancel_mutex_);
-    if (was_cancel_)
-    {
+    if (was_cancel_) {
         ulk.unlock();
         finish(asio::error::operation_aborted);
         return;
@@ -305,13 +294,11 @@ void HTTPRequest::handle_read_status_line(boost::system::error_code ec, std::siz
             handle_read_headers(ec, len);
         });
     }
-
 }
 
 void HTTPRequest::handle_read_headers(boost::system::error_code ec, std::size_t)
 {
-    if (ec)
-    {
+    if (ec) {
         finish(ec, "async_read");
         return;
     }
@@ -397,7 +384,6 @@ void HTTPRequest::handle_read_headers(boost::system::error_code ec, std::size_t)
                 handle_read_content(err, len);
             });
         }
-
     }
 }
 
