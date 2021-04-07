@@ -71,7 +71,7 @@ void HTTPRequest::set_task(task_t task, bool https, unsigned port)
     std::swap(host_, host);
     this->set_stream(https, port);
     task.version(10);   // only support 1.0 which has no chunked
-    task.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+    //task.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
     swap(task, task_);
 }
 
