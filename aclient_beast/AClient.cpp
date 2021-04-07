@@ -26,11 +26,10 @@ void default_handler(const HTTPRequest& request, HTTPResponse& response, const s
     return;
 }
 
-void HTTPRequest::set_host(std::string host, unsigned port)
+void HTTPRequest::set_stream(bool https, unsigned port)
 {
-    if (host.find("https://") != std::string::npos)
+    if (https)
     {
-        const static size_t protocolength = std::string("https://").length();
         ctx_ = std::make_shared<asio::ssl::context>(asio::ssl::context::sslv23_client);
         if (ctx_)
         {
@@ -40,9 +39,7 @@ void HTTPRequest::set_host(std::string host, unsigned port)
                 insocket_.reset();
             }
         }
-        host_ = host.substr(protocolength);
         port_ = port > 0 ? port : DEFAULT_SECURITY_PORT;
-
     }
     else
     {
@@ -51,21 +48,30 @@ void HTTPRequest::set_host(std::string host, unsigned port)
         {
             ssocket_.reset();
         }
-        if (host.find("http://") != std::string::npos)
-        {
-            const static size_t protocolength = std::string("http://").length();
-            host_ = host.substr(protocolength);
-        }
-        else
-        {
-            host_.swap(host);
-        }
         port_ = port > 0 ? port : DEFAULT_PORT;
     }
 }
 
-void HTTPRequest::set_task(task_t task)
+void HTTPRequest::set_task(task_t task, bool https, unsigned port)
 {
+    const auto ctor = task.find(http::field::host);
+    if (task.cend() == ctor) {
+        assert(false);
+        spdlog::warn("there is no host.");
+        return;
+    }
+    std::string host = ctor->value().to_string();
+    if (host.find("http://") != string::npos ||
+        host.find("https://") != string::npos)
+    {
+        assert(false);
+        spdlog::warn("the host start with http/s.");
+        return;
+    }
+    std::swap(host_, host);
+    this->set_stream(https, port);
+    task.version(10);   // only support 1.0 which has no chunked
+    task.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
     swap(task, task_);
 }
 

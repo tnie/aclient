@@ -92,10 +92,8 @@ public:
 
     // TODO 以下 set_xx 属性是否应该移到构造中？如何避免执行过程中的修改？
 
-    /// <param name="host">可以携带协议前缀，比如 https:// 或 http:// ，无前缀默认 http://</param>
     /// <param name="port">为零时根据协议类型使用默认端口。http 80 https 443</param>
-    void set_host(std::string host, unsigned port = 0);
-    void set_task(task_t task);
+    void set_task(task_t task, bool https = true, unsigned port = 0);
     void set_callback(Callback hl);
     //
     const std::string& get_host() const { return host_; }
@@ -106,6 +104,7 @@ public:
     virtual void execute();
     virtual void cancel();
 private:
+    void set_stream(bool https , unsigned port = 0);
     boost::system::error_code ec_;
     void handle_resolve(boost::system::error_code, asio::ip::tcp::resolver::results_type endpoints);
     void handle_connect(boost::system::error_code ec);
