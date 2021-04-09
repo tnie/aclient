@@ -26,6 +26,7 @@ int main()
         auto tt = curl_getdate(hr.get_header("date").c_str(), nullptr);
         if (tt < 0) {
             spdlog::warn("curl_getdate failed. {}", hr.get_header("date"));
+            return;
         }
         else {
             spdlog::info("date is: {}", tt);

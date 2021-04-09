@@ -21,6 +21,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "echo_client", "echo_client\
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "learn_beast", "learn_beast\learn_beast.vcxproj", "{4149C070-DD5F-423A-A954-991050D370C2}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "beast_co", "beast_co\beast_co.vcxproj", "{DD6B1EF3-F8DF-441B-9EBF-D5717398165C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
@@ -63,6 +65,10 @@ Global
 		{4149C070-DD5F-423A-A954-991050D370C2}.Debug|x86.Build.0 = Debug|Win32
 		{4149C070-DD5F-423A-A954-991050D370C2}.Release|x86.ActiveCfg = Release|Win32
 		{4149C070-DD5F-423A-A954-991050D370C2}.Release|x86.Build.0 = Release|Win32
+		{DD6B1EF3-F8DF-441B-9EBF-D5717398165C}.Debug|x86.ActiveCfg = Debug|Win32
+		{DD6B1EF3-F8DF-441B-9EBF-D5717398165C}.Debug|x86.Build.0 = Debug|Win32
+		{DD6B1EF3-F8DF-441B-9EBF-D5717398165C}.Release|x86.ActiveCfg = Release|Win32
+		{DD6B1EF3-F8DF-441B-9EBF-D5717398165C}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
