@@ -172,30 +172,29 @@ void HTTPRequest::execute()
     response_.reset();
     using asio::ip::tcp;
     asio::co_spawn(ioc_, [this, self = shared_from_this()]()->asio::awaitable<void> {
-        auto token = asio::use_awaitable;
-        auto executor = co_await asio::this_coro::executor;
         try
         {
-            auto endpoints = co_await resolver_.async_resolve(tcp::v4(), host_, std::to_string(port_), token);
+            auto endpoints = co_await resolver_.async_resolve(tcp::v4(), host_, std::to_string(port_), asio::use_awaitable);
             // 二选一
             assert((nullptr == ssocket_) != (nullptr == insocket_));
             auto & socket_ = ssocket_ ? ssocket_->lowest_layer() : *insocket_;
-            co_await async_connect(socket_, endpoints, token);
+            co_await async_connect(socket_, endpoints, asio::use_awaitable);
             assert(false == request_.empty());
             if (ssocket_)
             {
-                co_await ssocket_->async_handshake(asio::ssl::stream_base::client, token);
+                co_await ssocket_->async_handshake(asio::ssl::stream_base::client, asio::use_awaitable);
             }
             assert((nullptr == ssocket_) != (nullptr == insocket_));
             auto bytes = insocket_ ?    // 二选一
-                co_await asio::async_write(*insocket_, asio::buffer(request_), token) :
-                co_await asio::async_write(*ssocket_, asio::buffer(request_), token);
+                co_await asio::async_write(*insocket_, asio::buffer(request_), asio::use_awaitable) :
+                co_await asio::async_write(*ssocket_, asio::buffer(request_), asio::use_awaitable);
             // NOTE 有的服务端在客户端关闭写（继续读）之后，会直接关闭连接
             //socket_.shutdown(asio::socket_base::shutdown_send);
             assert(request_.size() == bytes);
             size_t len = insocket_ ?
-                co_await asio::async_read_until(*insocket_, response_.get_response_buf(), "\r\n", token) :
-                co_await asio::async_read_until(*ssocket_, response_.get_response_buf(), "\r\n", token);
+                co_await asio::async_read_until(*insocket_, response_.get_response_buf(), "\r\n", asio::use_awaitable) :
+                co_await asio::async_read_until(*ssocket_, response_.get_response_buf(), "\r\n", asio::use_awaitable);
+            co_await handle_response(request_);
         }
         catch (const std::system_error& e)
         {
@@ -208,9 +207,6 @@ void HTTPRequest::execute()
             spdlog::error("{} {}:{}", e.what(), __FILE__, __LINE__);
             co_return;
         }
-        asio::co_spawn(executor, [this, self ]() {
-            return  handle_response(request_);  // TODO 和 co_return 区别
-        }, asio::detached);
     }, asio::detached);
 }
 
