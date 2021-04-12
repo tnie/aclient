@@ -120,8 +120,9 @@ net::awaitable<void> run(char const* host,
             // http://stackoverflow.com/questions/25587403/boost-asio-ssl-async-shutdown-always-finishes-with-an-error
             ec = {};
         }
-        if (ec)
-            return fail(ec, "shutdown");
+        if (ec) {
+            fail(ec, "shutdown");
+        }
     }
     catch (const std::exception& e)
     {
