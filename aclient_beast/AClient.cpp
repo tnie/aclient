@@ -83,10 +83,8 @@ void HTTPRequest::execute()
     assert((insocket_ == nullptr) != (ssocket_ == nullptr));
 
     res_.clear();
-    std::unique_lock<mutex> ulk(cancel_mutex_);
     if (was_cancel_)
     {
-        ulk.unlock();
         finish(asio::error::operation_aborted);
         return;
     }
@@ -104,9 +102,7 @@ void HTTPRequest::handle_resolve(boost::system::error_code ec, asio::ip::tcp::re
         finish(ec);
         return;
     }
-    std::unique_lock<mutex> ulk(cancel_mutex_);
     if (was_cancel_) {
-        ulk.unlock();
         finish(asio::error::operation_aborted);
         return;
     }
@@ -126,9 +122,7 @@ void HTTPRequest::handle_connect(boost::system::error_code ec)
         finish(ec);
         return;
     }
-    std::unique_lock<mutex> ulk(cancel_mutex_);
     if (was_cancel_) {
-        ulk.unlock();
         finish(asio::error::operation_aborted);
         return;
     }
@@ -157,9 +151,7 @@ void HTTPRequest::handle_handshake(boost::system::error_code ec)
         finish(ec);
         return;
     }
-    std::unique_lock<mutex> ulk(cancel_mutex_);
     if (was_cancel_) {
-        ulk.unlock();
         finish(asio::error::operation_aborted);
         return;
     }
@@ -185,9 +177,7 @@ void HTTPRequest::handle_write(boost::system::error_code ec, std::size_t len)
     }
     // NOTE 有的服务端在客户端关闭写（继续读）之后，会直接关闭连接
     //socket_.shutdown(asio::socket_base::shutdown_send);
-    std::unique_lock<mutex> ulk(cancel_mutex_);
     if (was_cancel_) {
-        ulk.unlock();
         finish(asio::error::operation_aborted);
         return;
     }
@@ -300,16 +290,23 @@ void HTTPRequest::cancel()
 #if !defined(_WIN32_WINNT) || _WIN32_WINNT <= 0x502 // Windows Server 2003 or earlier.
     spdlog::warn("Not implemented '{}' in Windows Server 2003 or earlier.", __FUNCTION__);
 #else
-    unique_lock<mutex> ulk(cancel_mutex_);
-    was_cancel_ = true;
-    resolver_.cancel();
-    // 二选一
-    assert((nullptr == ssocket_) != (nullptr == insocket_));
-    auto & socket_ = ssocket_ ? beast::get_lowest_layer(*ssocket_) : *insocket_;
-    if (socket_.socket().is_open())
-    {
-        socket_.cancel();
-    }
+    std::weak_ptr<HTTPRequest> wptr = shared_from_this();
+    asio::post(ioc_, [this, wptr]() {
+        if (auto ptr = wptr.lock())
+        {
+            was_cancel_ = true;
+            resolver_.cancel();
+            // 二选一
+            assert((nullptr == ssocket_) != (nullptr == insocket_));
+            auto & stream = ssocket_ ? beast::get_lowest_layer(*ssocket_) : *insocket_;
+            auto & socket = stream.socket();
+            if (socket.is_open())
+            {
+                socket.cancel();
+                socket.close();
+            }
+        }
+    });
 #endif
 }
 

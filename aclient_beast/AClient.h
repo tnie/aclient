@@ -113,7 +113,6 @@ private:
     http::response<http::string_body> res_;
     Callback handler_;
     bool was_cancel_;
-    std::mutex cancel_mutex_;   // TODO 删除
     unsigned int uuid_;
     //
     asio::io_context& ioc_;
