@@ -16,7 +16,6 @@
 
 namespace asio = boost::asio;
 //using error_code = boost::system::error_code;  // std::error_code
-//using error_code = boost::system::error_code;
 namespace beast = boost::beast;
 namespace http = beast::http;
 using task_t = http::request<http::string_body>;

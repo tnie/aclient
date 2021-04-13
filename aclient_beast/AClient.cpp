@@ -186,9 +186,7 @@ void HTTPRequest::handle_write(boost::system::error_code ec, std::size_t len)
         if (ssocket_)
         {
             boost::beast::http::async_read(*ssocket_, buffer_, res_, [this, self = shared_from_this()](boost::system::error_code ec, std::size_t len) {
-                std::cout << (res_.base()) << std::endl;
-                spdlog::info("{}", res_.body().length());
-                std::cout << (res_.body()) << std::endl;
+                finish(ec);
             });
             assert(insocket_ == nullptr);
         }
@@ -196,11 +194,6 @@ void HTTPRequest::handle_write(boost::system::error_code ec, std::size_t len)
         {
             boost::beast::http::async_read(*insocket_, buffer_, res_, [this, self = shared_from_this()]
             (boost::system::error_code ec, std::size_t len) {
-                std::cout << (res_.base()) << std::endl;
-                spdlog::info("{}", res_.body().length());
-                spdlog::info(res_.body());
-                spdlog::info("");
-                std::cout << (res_.body()) << std::endl;
                 finish(ec);
             });
         }
