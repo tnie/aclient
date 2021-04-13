@@ -30,17 +30,15 @@ public:
     // 入参忽略大小写；返回小写
     std::string get_header(std::string) const;
     std::string get_etag() const;
-    asio::streambuf& get_response_buf();
-    void reset();
-    // 以下写操作需要鉴权
-    HTTPResponse()
+    const std::string& get_string_body() const;
+private:
+    friend class HTTPRequest;
+    HTTPResponse(http::response<http::string_body> res):
+        res_(std::move(res))
     {
 
     }
-private:
     http::response<http::string_body> res_;
-    //
-    asio::streambuf m_response_buf;
 };
 
 class HTTPRequest : public std::enable_shared_from_this<HTTPRequest>
@@ -112,7 +110,6 @@ private:
     std::string host_;
     unsigned port_;
     task_t task_;   // 用于扩展 HTTPRequest 的功能
-    HTTPResponse response_;
     beast::flat_buffer buffer_;
     http::response<http::string_body> res_;
     Callback handler_;

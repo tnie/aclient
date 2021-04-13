@@ -34,9 +34,7 @@ int main()
             spdlog::info("loca is: {}", rawtime);
         }
         const std::string gzip = hr.get_header("content-encoding");
-        std::istream response_stream(&hr.get_response_buf());
-        std::istreambuf_iterator<char> eos;
-        auto msg = std::string(std::istreambuf_iterator<char>(response_stream), eos);
+        const auto& msg = hr.get_string_body();
         if (gzip.find("gzip") != std::string::npos)
         {
             if (gzip::is_compressed(msg.c_str(), msg.size()))
