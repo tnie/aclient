@@ -216,86 +216,52 @@ void HTTPRequest::handle_write(boost::system::error_code ec, std::size_t len)
         }
     }
 }
-void HTTPRequest::handle_read_content(boost::system::error_code ec, std::size_t)
+
+void HTTPRequest::finish(boost::system::error_code ec, std::string msg)
 {
-    if (asio::error::eof/*2*/ == ec)
-    {
-        finish(boost::system::error_code());
-    }
-#if _WIN32_WINNT>=0x0600 && SSL_R_SHORT_READ   // 细节见《short read workaround.md》
-    // TODO maybe incorrect?
-    else if (ec.category() == asio::error::get_ssl_category() &&
-        ec.value() == ERR_PACK(ERR_LIB_SSL, 0, SSL_R_SHORT_READ)) {
-        // -> not a real error, just a normal TLS shutdown
-        do
+    auto get_ip = [this]() {
+        std::string ip;
+        if (ip.empty())
         {
             boost::system::error_code err;
-            assert(nullptr != ssocket_);
-            auto & socket_ = ssocket_->lowest_layer();
-            auto ep = socket_.remote_endpoint(err);
-            auto ip = err ? "null" : ep.address().to_string();
-            spdlog::warn("async_read faild:{}, {}. http{}://{}({}):{}@{}", ec.value(), ec.message(),
-                ssocket_ ? "s" : "",
-                host_, ip, port_, static_cast<void*>(this));
-        } while (false);
+            // 二选一
+            assert((nullptr == ssocket_) != (nullptr == insocket_));
+            auto & socket_ = ssocket_ ? beast::get_lowest_layer(*ssocket_) : *insocket_;
+            auto ep = socket_.socket().remote_endpoint(err);
+            ip = err ? "null" : ep.address().to_string();
+        }
+        return ip;
+    };
 
-        finish(boost::system::error_code());
-    }
-#endif
-    else
+    if (asio::error::eof/*2*/ == ec ||
+        asio::ssl::error::stream_truncated == ec ||
+        // -> not a real error, just a normal TLS shutdown
+        asio::error::operation_aborted /*995*/ == ec
+        // cancel
+        )
     {
-        finish(ec, "async_read");
+        asio::ssl::error::stream_truncated;
+        spdlog::warn("async_read faild:{}, {}. http{}://{}({}):{}@{}", ec.value(), ec.message(),
+            ssocket_ ? "s" : "",
+            host_, get_ip(), port_, static_cast<void*>(this));
+        ec.clear();
     }
-}
-
-void HTTPRequest::finish(const boost::system::error_code& ec, std::string msg)
-{
-    std::string ip;
-    if (ip.empty())
+    else if (ec && (ec.value() != asio::error::operation_aborted))
     {
-        boost::system::error_code err;
-        // 二选一
-        assert((nullptr == ssocket_) != (nullptr == insocket_));
-        auto & socket_ = ssocket_ ? beast::get_lowest_layer(*ssocket_) : *insocket_;
-        auto ep = socket_.socket().remote_endpoint(err);
-        ip = err ? "null" : ep.address().to_string();
-    }
-    if (ec && (ec.value() != asio::error::operation_aborted))
-    {
-
         spdlog::error("{} faild:{}, {}. http{}://{}({}):{}@{}", msg, ec.value(), ec.message(),
             ssocket_ ? "s" : "",
-            host_, ip, port_, static_cast<void*>(this));
+            host_, get_ip(), port_, static_cast<void*>(this));
     }
-    if (!ec)
-    {
-        // finish
-    }
-    else if (asio::error::operation_aborted /*995*/ == ec)
-    {
-        // cancel
-    }
-    HTTPResponse tmp{ res_ };
+
+    HTTPResponse tmp{ std::move(res_) };
     const string gzip = tmp.get_header("content-encoding");
     if (gzip.find("gzip") != std::string::npos) {
         handle_gzip();
     }
-    if (handler_)
-    {
-        if (asio::error::eof == ec)  // maybe incorrect?
-        {
-            // 是否正确存在疑问，所以没有缓存
-            handler_(*this, tmp, std::error_code());
-        }
-        else
-        {
-            handler_(*this, tmp, ec);
-        }
+    if (!handler_) {
+        handler_ = default_handler;
     }
-    else
-    {
-        default_handler(*this, tmp, ec);
-    }
+    handler_ (*this, tmp, ec);
 }
 
 void HTTPRequest::handle_gzip()

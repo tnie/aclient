@@ -102,10 +102,9 @@ private:
     void handle_connect(boost::system::error_code ec);
     void handle_handshake(boost::system::error_code ec);
     void handle_write(boost::system::error_code ec, std::size_t len);
-    void handle_read_content(boost::system::error_code err, std::size_t);
     // 如果通信时采用了 gzip 压缩，解压缩并回写（buf 和 size）
     void handle_gzip();
-    void finish(const boost::system::error_code&, std::string msg = "");
+    void finish(boost::system::error_code, std::string msg = "");
 private:
     std::string host_;
     unsigned port_;
