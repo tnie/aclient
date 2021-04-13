@@ -17,36 +17,31 @@
 namespace asio = boost::asio;
 //using error_code = boost::system::error_code;  // std::error_code
 //using error_code = boost::system::error_code;
+namespace beast = boost::beast;
+namespace http = beast::http;
+using task_t = http::request<http::string_body>;
 
 class HTTPRequest;
 class HTTPResponse final
 {
 public:
     unsigned int get_status_code() const;
-    const std::string& get_status_message() const;
-    const std::map<std::string, std::string>& get_headers() const;
+    std::string get_status_message() const;
     // 入参忽略大小写；返回小写
     std::string get_header(std::string) const;
     std::string get_etag() const;
     asio::streambuf& get_response_buf();
     void reset();
     // 以下写操作需要鉴权
-    void set_status_code(unsigned status_code, Passkey<HTTPRequest>);
-    void set_status_message(std::string status_message, Passkey<HTTPRequest>);
-    void add_header(std::string name, std::string value, Passkey<HTTPRequest>);
+    HTTPResponse()
+    {
+
+    }
 private:
-    // http status code & message
-    unsigned int m_status_code;
-    std::string m_status_message;
-    // response headers.
-    std::map<std::string, std::string> m_headers;
+    http::response<http::string_body> res_;
     //
     asio::streambuf m_response_buf;
 };
-
-namespace beast = boost::beast;
-namespace http = beast::http;
-using task_t = http::request<http::string_body>;
 
 class HTTPRequest : public std::enable_shared_from_this<HTTPRequest>
 {
@@ -105,13 +100,10 @@ public:
     virtual void cancel();
 private:
     void set_stream(bool https , unsigned port = 0);
-    boost::system::error_code ec_;
     void handle_resolve(boost::system::error_code, asio::ip::tcp::resolver::results_type endpoints);
     void handle_connect(boost::system::error_code ec);
     void handle_handshake(boost::system::error_code ec);
     void handle_write(boost::system::error_code ec, std::size_t len);
-    void handle_read_status_line(boost::system::error_code ec, std::size_t);
-    void handle_read_headers(boost::system::error_code err, std::size_t);
     void handle_read_content(boost::system::error_code err, std::size_t);
     // 如果通信时采用了 gzip 压缩，解压缩并回写（buf 和 size）
     void handle_gzip();
@@ -121,9 +113,11 @@ private:
     unsigned port_;
     task_t task_;   // 用于扩展 HTTPRequest 的功能
     HTTPResponse response_;
+    beast::flat_buffer buffer_;
+    http::response<http::string_body> res_;
     Callback handler_;
     bool was_cancel_;
-    std::mutex cancel_mutex_;
+    std::mutex cancel_mutex_;   // TODO 删除
     unsigned int uuid_;
     //
     asio::io_context& ioc_;
