@@ -53,7 +53,7 @@ class HTTPRequest : public std::enable_shared_from_this<HTTPRequest>
 
 protected:
     HTTPRequest(asio::io_context& ioc, unsigned int id) :
-        ioc_(ioc), uuid_(id), port_(DEFAULT_PORT), resolver_(ioc_), was_cancel_(false)
+        ioc_(ioc), uuid_(id), port_(DEFAULT_PORT), resolver_(ioc_)
     {
 #ifdef _DEBUG
         ++count;
@@ -72,7 +72,6 @@ private:
     HTTPRequest& operator==(HTTPRequest&&) = delete;
 public:
     using task_t = ::task_t;
-    // status_code == 304 时会填充 HTTPResponse::m_response_buf
     using Callback = std::function<void(const HTTPRequest&, /*const*/ HTTPResponse&, const std::error_code&)>;
     virtual ~HTTPRequest()
     {
@@ -111,7 +110,6 @@ private:
     beast::flat_buffer buffer_;
     http::response<http::string_body> res_;
     Callback handler_;
-    bool was_cancel_;
     unsigned int uuid_;
     //
     asio::io_context& ioc_;

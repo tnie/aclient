@@ -83,46 +83,24 @@ void HTTPRequest::execute()
     assert((insocket_ == nullptr) != (ssocket_ == nullptr));
 
     res_.clear();
-    if (was_cancel_)
-    {
-        finish(asio::error::operation_aborted);
-        return;
-    }
     using asio::ip::tcp;
     asio::co_spawn(ioc_, [this, self = shared_from_this()]() ->asio::awaitable<void> {
         try
         {
             asio::ip::tcp::resolver::results_type endpoints =
                 co_await resolver_.async_resolve(tcp::v4(), host_, std::to_string(port_), asio::use_awaitable);
-            if (was_cancel_) {
-                finish(asio::error::operation_aborted);
-                co_return;
-            }
             // 二选一
             assert((nullptr == ssocket_) != (nullptr == insocket_));
             auto & stream = ssocket_ ? beast::get_lowest_layer(*ssocket_) : *insocket_;
             stream.expires_after(30s);
             co_await stream.async_connect(endpoints, asio::use_awaitable);
-            if (was_cancel_) {
-                finish(asio::error::operation_aborted);
-                co_return;
-            }
-            if (ssocket_)
-            {
-                co_await ssocket_->async_handshake(asio::ssl::stream_base::client, asio::use_awaitable);
+            if (ssocket_) {
                 // http 通信不应进入此函数
-                if (was_cancel_) {
-                    finish(asio::error::operation_aborted);
-                    co_return;
-                }
+                co_await ssocket_->async_handshake(asio::ssl::stream_base::client, asio::use_awaitable);
             }
             std::size_t len = co_await http::async_write(stream, task_, asio::use_awaitable);
             // NOTE 有的服务端在客户端关闭写（继续读）之后，会直接关闭连接
             //socket_.shutdown(asio::socket_base::shutdown_send);
-            if (was_cancel_) {
-                finish(asio::error::operation_aborted);
-                co_return;
-            }
             if (ssocket_)
             {
                 std::size_t len = co_await boost::beast::http::async_read(*ssocket_, buffer_, res_, asio::use_awaitable);
@@ -131,10 +109,6 @@ void HTTPRequest::execute()
             else if (insocket_)
             {
                 std::size_t len = co_await boost::beast::http::async_read(*insocket_, buffer_, res_, asio::use_awaitable);
-            }
-            if (was_cancel_) {
-                finish(asio::error::operation_aborted);
-                co_return;
             }
             finish({});
         }
@@ -236,7 +210,6 @@ void HTTPRequest::cancel()
     asio::post(ioc_, [this, wptr]() {
         if (auto ptr = wptr.lock())
         {
-            was_cancel_ = true;
             resolver_.cancel();
             // 二选一
             assert((nullptr == ssocket_) != (nullptr == insocket_));
