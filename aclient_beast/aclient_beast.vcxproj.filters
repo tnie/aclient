@@ -26,11 +26,5 @@
     <ClInclude Include="AClient.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="http_errors.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="Utility.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
   </ItemGroup>
 </Project>

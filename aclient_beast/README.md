@@ -43,7 +43,7 @@ A header includes the **start-line** and header-fields.
 
 This container is designed to store the field value pairs that make up the fields and trailers in an HTTP message. 
 
-Field names are stored as-is, but comparisons are case-insensitive.
+Field names are stored as-is, but comparisons are case-insensitive. 不区分大小写
 
 When the container is iterated the fields are presented in the order of insertion, with fields having the same name following each other consecutively. 
 

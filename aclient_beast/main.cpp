@@ -3,12 +3,12 @@
 int main()
 {
     constexpr unsigned tag = 1;
-    auto request = HTTPClient::getInstance().create_request(tag);
+    auto request = Singleton<HTTPClient>::instance().create_request(tag);
     task_t task;
     task.method(http::verb::get);
     task.target("/");
-    task.set(http::field::host, "127.0.0.1");
-    request->set_task(task, false, 55555);
+    task.set(http::field::host, "www.baidu.com");
+    request->set_task(task, false);
     request->set_callback([](const HTTPRequest& dummy, HTTPResponse& hr, const std::error_code& ec) {
         if (ec || hr.get_status_code() != 200)
         {
@@ -47,5 +47,5 @@ int main()
         }
     });
     request->execute();
-    HTTPClient::getInstance().wait();
+    Singleton<HTTPClient>::instance().wait();
 }

@@ -5,6 +5,7 @@
 
 #include <boost/beast.hpp>
 #include <boost\beast\ssl.hpp>
+#include <boost/container/detail/singleton.hpp>
 #include <fstream>
 #include <boost\asio.hpp>
 #include <boost\asio\ssl.hpp>
@@ -12,7 +13,6 @@
 #include <spdlog\spdlog.h>
 #include <queue>
 #include <map>
-#include "Utility.h"
 
 namespace asio = boost::asio;
 //using error_code = boost::system::error_code;  // std::error_code
@@ -123,9 +123,12 @@ private:
 
 };
 
-class HTTPClient : public Singleton<HTTPClient>
+template<typename T>
+using Singleton = boost::container::dtl::singleton_default<T>;
+
+class HTTPClient
 {
-    friend class Singleton<HTTPClient>;
+    friend struct boost::container::dtl::singleton_default<HTTPClient>;
     HTTPClient();
 public:
     std::shared_ptr<HTTPRequest> create_request(unsigned id)

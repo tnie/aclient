@@ -1,5 +1,5 @@
 ﻿#include "AClient.h"
-#include "http_errors.h"
+#include <boost\algorithm\string\case_conv.hpp>
 
 using namespace std;
 
@@ -341,11 +341,10 @@ std::string HTTPResponse::get_etag() const
 
 std::string HTTPResponse::get_header(std::string header) const
 {
-    using utility::tolower;
-    header = tolower(header);
     auto tgt = res_.find(header);
     string value = (tgt != res_.cend() ? tgt->value().to_string() : "");
-    return tolower(value);
+    boost::to_lower(value);
+    return value;
 }
 
 HTTPClient::HTTPClient() : /*ioc_(1),*/ guard_(ioc_.get_executor())
