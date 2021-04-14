@@ -85,9 +85,11 @@
   <ItemGroup>
     <ClCompile Include="AClient.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="WebSocketRequest.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AClient.h" />
+    <ClInclude Include="WebSocketRequest.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

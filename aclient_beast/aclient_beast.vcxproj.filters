@@ -21,9 +21,15 @@
     <ClCompile Include="main.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="WebSocketRequest.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AClient.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="WebSocketRequest.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
