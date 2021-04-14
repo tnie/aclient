@@ -203,26 +203,34 @@ void HTTPRequest::handle_gzip()
 
 void HTTPRequest::cancel()
 {
-#if !defined(_WIN32_WINNT) || _WIN32_WINNT <= 0x502 // Windows Server 2003 or earlier.
-    spdlog::warn("Not implemented '{}' in Windows Server 2003 or earlier.", __FUNCTION__);
-#else
     std::weak_ptr<HTTPRequest> wptr = shared_from_this();
     asio::post(ioc_, [this, wptr]() {
-        if (auto ptr = wptr.lock())
+        try
         {
-            resolver_.cancel();
-            // 二选一
-            assert((nullptr == ssocket_) != (nullptr == insocket_));
-            auto & stream = ssocket_ ? beast::get_lowest_layer(*ssocket_) : *insocket_;
-            auto & socket = stream.socket();
-            if (socket.is_open())
+            if (auto ptr = wptr.lock())
             {
-                socket.cancel();
-                socket.close();
+                resolver_.cancel();
+                // 二选一
+                assert((nullptr == ssocket_) != (nullptr == insocket_));
+                auto & stream = ssocket_ ? beast::get_lowest_layer(*ssocket_) : *insocket_;
+                auto & socket = stream.socket();
+                if (socket.is_open())
+                {
+    //https://think-async.com/Asio/asio-1.18.1/doc/asio/reference/basic_stream_socket/cancel/overload1.html
+                    socket.cancel();
+                    socket.close();
+                }
             }
         }
+        catch (const boost::system::system_error e)
+        {
+            spdlog::warn("{} {}:{}", e.what(), __FILE__, __LINE__);
+        }
+        catch (const std::exception& e)
+        {
+            spdlog::error("{} {}:{}", e.what(), __FILE__, __LINE__);
+        }
     });
-#endif
 }
 
 void HTTPRequest::set_callback(Callback hl)
