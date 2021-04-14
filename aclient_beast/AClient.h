@@ -124,6 +124,7 @@ private:
 template<typename T>
 using Singleton = boost::container::dtl::singleton_default<T>;
 
+class WebSocketRequest;
 class HTTPClient
 {
     friend struct boost::container::dtl::singleton_default<HTTPClient>;
@@ -133,6 +134,7 @@ public:
     {
         return std::shared_ptr<HTTPRequest>(new HTTPRequest(ioc_, id));
     }
+    std::shared_ptr<WebSocketRequest> create_websocket(unsigned id);
     std::shared_ptr<asio::steady_timer> create_timer(std::chrono::milliseconds timeout)
     {
         return std::make_shared<asio::steady_timer>(ioc_, timeout);
