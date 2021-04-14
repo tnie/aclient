@@ -3,6 +3,10 @@
 #define ASIO_NO_DEPRECATED  // 开发时启用。但此宏和 websocketpp 项目不兼容
 #endif // !ASIO_NO_DEPRECATED
 
+#ifndef _RESUMABLE_FUNCTIONS_SUPPORTED
+#define _RESUMABLE_FUNCTIONS_SUPPORTED // 在 vc2015 update3 中使用协程
+#endif // !_RESUMABLE_FUNCTIONS_SUPPORTED
+
 #include <boost/beast.hpp>
 #include <boost\beast\ssl.hpp>
 #include <boost/container/detail/singleton.hpp>
@@ -97,10 +101,6 @@ public:
     virtual void cancel();
 private:
     void set_stream(bool https , unsigned port = 0);
-    void handle_resolve(boost::system::error_code, asio::ip::tcp::resolver::results_type endpoints);
-    void handle_connect(boost::system::error_code ec);
-    void handle_handshake(boost::system::error_code ec);
-    void handle_write(boost::system::error_code ec, std::size_t len);
     // 如果通信时采用了 gzip 压缩，解压缩并回写（buf 和 size）
     void handle_gzip();
     void finish(boost::system::error_code, std::string msg = "");

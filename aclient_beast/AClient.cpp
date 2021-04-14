@@ -89,115 +89,64 @@ void HTTPRequest::execute()
         return;
     }
     using asio::ip::tcp;
-    resolver_.async_resolve(tcp::v4(), host_, std::to_string(port_), [this, self = shared_from_this()](boost::system::error_code ec, tcp::resolver::results_type ep) {
-        self;
-        handle_resolve(ec, ep);
-    });
-}
-
-void HTTPRequest::handle_resolve(boost::system::error_code ec, asio::ip::tcp::resolver::results_type endpoints)
-{
-    using asio::ip::tcp;
-    if (ec) {
-        finish(ec);
-        return;
-    }
-    if (was_cancel_) {
-        finish(asio::error::operation_aborted);
-        return;
-    }
-    // 二选一
-    assert((nullptr == ssocket_) != (nullptr == insocket_));
-    auto & stream = ssocket_ ? beast::get_lowest_layer(*ssocket_) : *insocket_;
-    stream.expires_after(30s);
-    stream.async_connect(endpoints, [this, self = shared_from_this()](boost::system::error_code ec, tcp::endpoint ep) {
-        self;
-        handle_connect(ec);
-    });
-}
-
-void HTTPRequest::handle_connect(boost::system::error_code ec)
-{
-    if (ec) {
-        finish(ec);
-        return;
-    }
-    if (was_cancel_) {
-        finish(asio::error::operation_aborted);
-        return;
-    }
-    // 二选一
-    if (insocket_)
-    {
-        auto & stream = *insocket_;
-        http::async_write(stream, task_, [this, self = shared_from_this()](boost::system::error_code ec, std::size_t len) {
-            handle_write(ec, len);
-        });
-        assert(ssocket_ == nullptr);
-    }
-    else if (ssocket_)
-    {
-        ssocket_->async_handshake(asio::ssl::stream_base::client, [this, self = shared_from_this()](boost::system::error_code ec){
-            handle_handshake(ec);
-        });
-    }
-}
-
-void HTTPRequest::handle_handshake(boost::system::error_code ec)
-{
-    // http 通信不应进入此函数
-    assert(nullptr == insocket_);
-    if (ec) {
-        finish(ec);
-        return;
-    }
-    if (was_cancel_) {
-        finish(asio::error::operation_aborted);
-        return;
-    }
-    // 二选一
-    if (ssocket_)
-    {
-        http::async_write(*ssocket_, task_, [this, self = shared_from_this()](boost::system::error_code ec, std::size_t len) {
-            handle_write(ec, len);
-        });
-        assert(insocket_ == nullptr);
-    }
-    else if (insocket_)
-    {
-        assert("未知错误- http 通信不应该进入此函数" && false);
-    }
-}
-
-void HTTPRequest::handle_write(boost::system::error_code ec, std::size_t len)
-{
-    if (ec) {
-        finish(ec, "async_write");
-        return;
-    }
-    // NOTE 有的服务端在客户端关闭写（继续读）之后，会直接关闭连接
-    //socket_.shutdown(asio::socket_base::shutdown_send);
-    if (was_cancel_) {
-        finish(asio::error::operation_aborted);
-        return;
-    }
-    //if (request_.size() == len)
-    {
-        if (ssocket_)
+    asio::co_spawn(ioc_, [this, self = shared_from_this()]() ->asio::awaitable<void> {
+        try
         {
-            boost::beast::http::async_read(*ssocket_, buffer_, res_, [this, self = shared_from_this()](boost::system::error_code ec, std::size_t len) {
-                finish(ec);
-            });
-            assert(insocket_ == nullptr);
+            asio::ip::tcp::resolver::results_type endpoints =
+                co_await resolver_.async_resolve(tcp::v4(), host_, std::to_string(port_), asio::use_awaitable);
+            if (was_cancel_) {
+                finish(asio::error::operation_aborted);
+                co_return;
+            }
+            // 二选一
+            assert((nullptr == ssocket_) != (nullptr == insocket_));
+            auto & stream = ssocket_ ? beast::get_lowest_layer(*ssocket_) : *insocket_;
+            stream.expires_after(30s);
+            co_await stream.async_connect(endpoints, asio::use_awaitable);
+            if (was_cancel_) {
+                finish(asio::error::operation_aborted);
+                co_return;
+            }
+            if (ssocket_)
+            {
+                co_await ssocket_->async_handshake(asio::ssl::stream_base::client, asio::use_awaitable);
+                // http 通信不应进入此函数
+                if (was_cancel_) {
+                    finish(asio::error::operation_aborted);
+                    co_return;
+                }
+            }
+            std::size_t len = co_await http::async_write(stream, task_, asio::use_awaitable);
+            // NOTE 有的服务端在客户端关闭写（继续读）之后，会直接关闭连接
+            //socket_.shutdown(asio::socket_base::shutdown_send);
+            if (was_cancel_) {
+                finish(asio::error::operation_aborted);
+                co_return;
+            }
+            if (ssocket_)
+            {
+                std::size_t len = co_await boost::beast::http::async_read(*ssocket_, buffer_, res_, asio::use_awaitable);
+                assert(insocket_ == nullptr);
+            }
+            else if (insocket_)
+            {
+                std::size_t len = co_await boost::beast::http::async_read(*insocket_, buffer_, res_, asio::use_awaitable);
+            }
+            if (was_cancel_) {
+                finish(asio::error::operation_aborted);
+                co_return;
+            }
+            finish({});
         }
-        else if (insocket_)
+        catch (const boost::system::system_error& e)
         {
-            boost::beast::http::async_read(*insocket_, buffer_, res_, [this, self = shared_from_this()]
-            (boost::system::error_code ec, std::size_t len) {
-                finish(ec);
-            });
+            finish(e.code());
         }
-    }
+        catch (const std::exception& e)
+        {
+            spdlog::error("{} {}:{}", e.what(), __FILE__, __LINE__);
+        }
+    }, asio::detached);
 }
 
 void HTTPRequest::finish(boost::system::error_code ec, std::string msg)
