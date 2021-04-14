@@ -65,7 +65,7 @@ void HTTPRequest::set_task(task_t task, bool https, unsigned port)
         host.find("https://") != string::npos)
     {
         assert(false);
-        spdlog::warn("the host start with http/s.");
+        spdlog::warn("the host can't start with http/s.");
         return;
     }
     std::swap(host_, host);
