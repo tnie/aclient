@@ -56,17 +56,17 @@ auto test_ws()
 {
     constexpr unsigned tag = 1;
     auto request = Singleton<HTTPClient>::instance().create_websocket(tag);
-    request->set_task("devyun.ydtg.com.cn", false, "//?username=abc&password=123");
+    request->set_task("yun.ydtg.com.cn", false, "//?username=abc&password=123");
     request->execute();
     return std::async(std::launch::async, [=]() {
-        std::this_thread::sleep_for(3s);
+        std::this_thread::sleep_for(5s);
         request->close();
     });
 }
 int main()
 {
     spdlog::set_level(spdlog::level::debug);
-    SetConsoleOutputCP(CP_UTF8);
+    //SetConsoleOutputCP(CP_UTF8);
     test_ws();
     Singleton<HTTPClient>::instance().wait();
 }

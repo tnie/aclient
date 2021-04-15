@@ -80,7 +80,10 @@ void WebSocketRequest::send(const std::string & msg)
 void WebSocketRequest::close()
 {
     auto handler = [self = shared_from_this()](beast::error_code ec) {
-        if (ec == boost::asio::error::eof) {
+        if (ec == boost::asio::error::eof ||
+            ec == boost::asio::error::operation_aborted
+            )
+        {
             // 技术错误。但业务上无关紧要
             spdlog::warn("{} {}:{}", ec.message(), __FILE__, __LINE__);
         }
