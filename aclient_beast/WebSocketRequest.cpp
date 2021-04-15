@@ -113,15 +113,18 @@ void WebSocketRequest::execute()
         {
             asio::ip::tcp::resolver::results_type endpoints =
                 co_await resolver_.async_resolve(tcp::v4(), host_, std::to_string(port_), asio::use_awaitable);
+            spdlog::debug("async_resolve() done.");
             // 二选一
             assert((nullptr == ssocket_) != (nullptr == ws_));
             auto & stream = ssocket_ ? beast::get_lowest_layer(*ssocket_) : beast::get_lowest_layer(*ws_);
             stream.expires_after(30s);
             asio::ip::tcp::endpoint endpoint =
                 co_await stream.async_connect(endpoints, asio::use_awaitable);
+            spdlog::debug("async_connect() done.");
             if (ssocket_) {
                 // http 通信不应进入此函数
                 co_await ssocket_->next_layer().async_handshake(asio::ssl::stream_base::client, asio::use_awaitable);
+                spdlog::debug("ssl async_handshake() done.");
             }
             // Turn off the timeout on the tcp_stream, because
             // the websocket stream has its own timeout system.
@@ -135,6 +138,7 @@ void WebSocketRequest::execute()
                     beast::websocket::stream_base::timeout::suggested(
                         beast::role_type::client));
                 co_await ws_->async_handshake(host, target_, asio::use_awaitable);
+                spdlog::debug("websocket async_handshake() done.");
                 //std::size_t len = co_await ws_->async_write(asio::buffer(""), asio::use_awaitable);
                 do
                 {

@@ -65,6 +65,7 @@ auto test_ws()
 }
 int main()
 {
+    spdlog::set_level(spdlog::level::debug);
     SetConsoleOutputCP(CP_UTF8);
     test_ws();
     Singleton<HTTPClient>::instance().wait();
