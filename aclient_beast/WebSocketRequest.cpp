@@ -93,6 +93,8 @@ void WebSocketRequest::close()
         }
     };
     asio::post(ioc_, [this, self = shared_from_this(), handler]() {
+        cancel_ = true;
+        timer_.cancel();
         // Close the WebSocket connection
         if (ws_) {
             if (ws_->is_open()) {
@@ -185,6 +187,25 @@ void WebSocketRequest::execute()
             }
             else {
                 spdlog::error("{} {}:{}", e.what(), __FILE__, __LINE__);
+            }
+
+            if (false == cancel_)   // 如果客户端不主动取消，就要重连服务
+            {
+                timer_.expires_after(10s);
+                timer_.async_wait([self](const boost::system::error_code& ec) mutable {
+                    if (ec) { // 响应 timer->cancel();
+                        spdlog::info("> m_timer {}[{}]", ec.message(), ec.value());
+                    }
+                    else {
+                        bool wss = false;
+                        if (self->ssocket_)
+                            wss = true;
+                        else
+                            assert(self->ws_);
+                        self->set_task(self->host_, wss, self->target_, self->port_);
+                        self->execute();
+                    }
+                });
             }
         }
         catch (const std::exception& e)

@@ -11,7 +11,7 @@ class WebSocketRequest : public std::enable_shared_from_this<WebSocketRequest>
 
 protected:
     WebSocketRequest(asio::io_context& ioc, unsigned int id) :
-        ioc_(ioc), uuid_(id), port_(DEFAULT_PORT), resolver_(ioc_)
+        ioc_(ioc), uuid_(id), port_(DEFAULT_PORT), resolver_(ioc_), timer_(ioc_)
     {
 
     }
@@ -46,5 +46,7 @@ private:
     std::shared_ptr<websocket::stream<beast::tcp_stream>> ws_;
     std::shared_ptr<asio::ssl::context> ctx_;    // TODO reference?
     std::shared_ptr<websocket::stream<beast::ssl_stream<beast::tcp_stream>>> ssocket_;
+    bool cancel_ = false;   // 客户端主动取消
+    asio::steady_timer timer_;
 };
 
