@@ -79,23 +79,27 @@ void WebSocketRequest::send(const std::string & msg)
 
 void WebSocketRequest::close()
 {
-    asio::post(ioc_, [this, self = shared_from_this()]() {
-        auto handler = [self = shared_from_this()](beast::error_code ec) {
-            if (ec == boost::asio::error::eof) {
-                // 技术错误。但业务上无关紧要
-                spdlog::warn("{} {}:{}", ec.message(), __FILE__, __LINE__);
-            }
-            else if (ec) {
-                spdlog::error("close websocket failed. {} {}:{}",
-                    ec.message(), __FILE__, __LINE__);
-            }
-        };
+    auto handler = [self = shared_from_this()](beast::error_code ec) {
+        if (ec == boost::asio::error::eof) {
+            // 技术错误。但业务上无关紧要
+            spdlog::warn("{} {}:{}", ec.message(), __FILE__, __LINE__);
+        }
+        else if (ec) {
+            spdlog::error("close websocket failed. {} {}:{}",
+                ec.message(), __FILE__, __LINE__);
+        }
+    };
+    asio::post(ioc_, [this, self = shared_from_this(), handler]() {
         // Close the WebSocket connection
         if (ws_) {
-            ws_->async_close(websocket::close_code::normal, handler);
+            if (ws_->is_open()) {
+                ws_->async_close(websocket::close_code::normal, handler);
+            }
         }
         else if (ssocket_) {
-            ssocket_->async_close(websocket::close_code::normal, handler);
+            if (ssocket_->is_open()) {
+                ssocket_->async_close(websocket::close_code::normal, handler);
+            }
         }
     });
 }
