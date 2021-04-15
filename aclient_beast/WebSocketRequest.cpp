@@ -81,8 +81,13 @@ void WebSocketRequest::close()
 {
     asio::post(ioc_, [this, self = shared_from_this()]() {
         auto handler = [self = shared_from_this()](beast::error_code ec) {
-            if (ec) {
-                spdlog::error("close websocket failed. {}", ec.message());
+            if (ec == boost::asio::error::eof) {
+                // 技术错误。但业务上无关紧要
+                spdlog::warn("{} {}:{}", ec.message(), __FILE__, __LINE__);
+            }
+            else if (ec) {
+                spdlog::error("close websocket failed. {} {}:{}",
+                    ec.message(), __FILE__, __LINE__);
             }
         };
         // Close the WebSocket connection
@@ -159,7 +164,17 @@ void WebSocketRequest::execute()
         }
         catch (const boost::system::system_error& e)
         {
-            spdlog::error("{} {}:{}", e.what(), __FILE__, __LINE__);
+            const auto& ec = e.code();
+            if (ec == boost::beast::websocket::error::closed ||
+                ec == boost::asio::error::operation_aborted ||
+                ec == boost::asio::error::eof
+                )
+            {
+                spdlog::warn("{} {}:{}", e.what(), __FILE__, __LINE__);
+            }
+            else {
+                spdlog::error("{} {}:{}", e.what(), __FILE__, __LINE__);
+            }
         }
         catch (const std::exception& e)
         {
