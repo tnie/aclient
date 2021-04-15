@@ -27,13 +27,14 @@ public:
     using Callback = std::function<void(const WebSocketRequest&, const beast::flat_buffer&, const std::error_code&)>;
     ~WebSocketRequest();
     /// <param name="port">为零时根据协议类型使用默认端口。http 80 https 443</param>
-    void set_task(std::string host, bool wss = true, unsigned port = 0);
+    void set_task(std::string host, bool wss = true, std::string target = "", unsigned port = 0);
     void send(const std::string& msg);
     void close();
     virtual void execute();
     virtual void cancel() {};
 private:
     std::string host_;
+    std::string target_;
     unsigned port_;
     beast::flat_buffer buffer_;
     Callback handler_;

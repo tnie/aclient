@@ -56,7 +56,7 @@ auto test_ws()
 {
     constexpr unsigned tag = 1;
     auto request = Singleton<HTTPClient>::instance().create_websocket(tag);
-    request->set_task("devyun.ydtg.com.cn", false);
+    request->set_task("devyun.ydtg.com.cn", false, "//?username=abc&password=123");
     request->execute();
     return std::async(std::launch::async, [=]() {
         std::this_thread::sleep_for(3s);

@@ -11,7 +11,7 @@ WebSocketRequest::~WebSocketRequest()
 {
 }
 
-void WebSocketRequest::set_task(std::string host, bool https, unsigned port)
+void WebSocketRequest::set_task(std::string host, bool https, std::string target, unsigned port)
 {
     if (host.find("http://") != string::npos ||
         host.find("https://") != string::npos ||
@@ -23,6 +23,7 @@ void WebSocketRequest::set_task(std::string host, bool https, unsigned port)
         return;
     }
     std::swap(host_, host);
+    std::swap(target_, target);
     if (https)
     {
         ctx_ = std::make_shared<asio::ssl::context>(asio::ssl::context::sslv23_client);
@@ -128,7 +129,7 @@ void WebSocketRequest::execute()
                 ws_->set_option(
                     beast::websocket::stream_base::timeout::suggested(
                         beast::role_type::client));
-                co_await ws_->async_handshake(host, "//?username=abc&password=123", asio::use_awaitable);
+                co_await ws_->async_handshake(host, target_, asio::use_awaitable);
                 //std::size_t len = co_await ws_->async_write(asio::buffer(""), asio::use_awaitable);
                 do
                 {
