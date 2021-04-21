@@ -6,6 +6,8 @@
 
 [boost beast message][message] 笔记
 
+request 或者 response 都是 message
+
 ```cpp
 /// A typical HTTP request
 template<class Body, class Fields = fields>
@@ -16,6 +18,7 @@ template<class Body, class Fields = fields>
 using response = message<false, Body, Fields>;
 ```
 
+message 继承于 fields，后者是 [field][f] 的容器
 
 ```cpp
 template<
@@ -94,4 +97,22 @@ https://www.boost.org/doc/libs/1_75_0/libs/beast/example/http/client/async-ssl/h
 不显示指定 CA，那默认使用的哪里的 CA 呢？
 
 
+## openssl
+
+[OpenSSL 1.1.0+ have changed library names in windows](https://github.com/tnie/StockDataLayer/issues/9)
+
+在 windows 平台使用 openssl 有两种方式：
+
+1. 下载源码，根据其中的手册通过 nmake 生成动态库 or 静态库。需要 activeperl 和 nasm 环境。
+
+	静态库或导入库名称 libeay32.lib，ssleay32.lib；动态库名称 libeay32.dll，ssleay32.dll。给一篇 [博客][4] 参考。
+
+2. 从网上下载 [第三方编译的结果](https://wiki.openssl.org/index.php/Binaries)
+
+	其中 grpc 同时也在用的 https://slproweb.com/products/Win32OpenSSL.html 此地址下载内容 VC 目录中文件以 `libcrypto32M[TD](d).lib` `libssl32M[TD](d).lib` 命名。
+
+
+
+
+[f]:https://www.boost.org/doc/libs/1_75_0/libs/beast/doc/html/beast/ref/boost__beast__http__field.html
 [message]:https://www.boost.org/doc/libs/develop/libs/beast/doc/html/beast/using_http/message_containers.html
