@@ -8,6 +8,27 @@ using namespace asio;
 using namespace std;
 using namespace std::chrono_literals;
 
+void change_expire_time(asio::io_context& ioc)
+{
+    asio::steady_timer task(ioc, 500ms);
+    // 同 cancel
+    task.async_wait(
+        [](const asio::error_code& ec) {
+        if (asio::error::operation_aborted == ec) {
+            spdlog::warn("asio::error::operation_aborted. \n{}\n{}",
+                "expires_after() function sets the expiry time. "
+                , " Any pending asynchronous wait operations will be cancelled");
+        }
+        else {
+            spdlog::info("do something.");
+        }
+    });
+    this_thread::sleep_for(500ms);  // 多次执行，有时成功取消，有时已经执行
+    size_t num = task.expires_after(10ms);
+    spdlog::info("Return Value = {}: The number of asynchronous operations that were cancelled.", num);
+    this_thread::sleep_for(1000ms);
+}
+
 void deconstruction(asio::io_context& ioc)
 {
     asio::steady_timer task(ioc, 500ms);
@@ -176,6 +197,8 @@ int main()
         }
     });
     // do something
+    change_expire_time(ioc);
+    return 0;
     //deconstruction(ioc);
     //completes_immediately(ioc);
     //common(task);
