@@ -7,16 +7,12 @@
 #define _RESUMABLE_FUNCTIONS_SUPPORTED // 在 vc2015 update3 中使用协程
 #endif // !_RESUMABLE_FUNCTIONS_SUPPORTED
 
-#include <boost/beast.hpp>
+#include <boost\beast.hpp>
 #include <boost\beast\ssl.hpp>
-#include <boost/container/detail/singleton.hpp>
-#include <fstream>
+#include <boost\container\detail\singleton.hpp>
 #include <boost\asio.hpp>
 #include <boost\asio\ssl.hpp>
-#include <iostream>
 #include <spdlog\spdlog.h>
-#include <queue>
-#include <map>
 
 namespace asio = boost::asio;
 //using error_code = boost::system::error_code;  // std::error_code
@@ -36,50 +32,22 @@ public:
     const std::string& get_string_body() const;
 private:
     friend class HTTPRequest;
-    HTTPResponse(http::response<http::string_body> res):
-        res_(std::move(res))
-    {
-
-    }
+    HTTPResponse(http::response<http::string_body> res) : res_(std::move(res)) {}
     http::response<http::string_body> res_;
 };
 
-class HTTPRequest : public std::enable_shared_from_this<HTTPRequest>
+class HTTPRequest final: public std::enable_shared_from_this<HTTPRequest>
 {
-    static std::atomic<unsigned long> count;
     friend class HTTPClient;
-    static const unsigned DEFAULT_PORT = 80;
-    static const unsigned DEFAULT_SECURITY_PORT = 443;
-
-protected:
-    HTTPRequest(asio::io_context& ioc, unsigned int id) :
-        ioc_(ioc), uuid_(id), port_(DEFAULT_PORT), resolver_(ioc_)
-    {
-#ifdef _DEBUG
-        ++count;
-        if (count % 1000 == 0)
-        {
-            spdlog::warn("There are {} sockets.", count);
-        }
-#endif // _DEBUG
-    }
-    asio::io_context& ioc() { return ioc_; }
-private:
+    HTTPRequest(asio::io_context& ioc, unsigned int id);
     // 所有的异步回调全都依赖 this 指针。但不提供拷贝构造&移动构造的类型，无法作为 vector 的元素
     HTTPRequest(const HTTPRequest&) = delete;
     HTTPRequest& operator==(const HTTPRequest&) = delete;
     HTTPRequest(HTTPRequest&&) = delete;
     HTTPRequest& operator==(HTTPRequest&&) = delete;
 public:
-    using task_t = ::task_t;
-    using Callback = std::function<void(const HTTPRequest&, /*const*/ HTTPResponse&, const std::error_code&)>;
-    virtual ~HTTPRequest()
-    {
-#ifdef _DEBUG
-        --count;
-#endif // _DEBUG
-    }
-    //
+    using Callback = std::function<void(const HTTPRequest&, const HTTPResponse&, const std::error_code&)>;
+    ~HTTPRequest();
     static std::shared_ptr<HTTPRequest> create_request(asio::io_context& ioc, unsigned int id)
     {
         return std::shared_ptr<HTTPRequest>(new HTTPRequest(ioc, id));
@@ -90,14 +58,13 @@ public:
     /// <param name="port">为零时根据协议类型使用默认端口。http 80 https 443</param>
     void set_task(task_t task, bool https = true, unsigned port = 0);
     void set_callback(Callback hl);
+    void execute();
+    void cancel();
     //
     const std::string& get_host() const { return host_; }
-    unsigned get_port() const { return port_; }
     const task_t& get_task() const { return task_; }
+    unsigned get_port() const { return port_; }
     unsigned get_id() const { return uuid_; }
-    //
-    virtual void execute();
-    virtual void cancel();
 private:
     void set_stream(bool https , unsigned port = 0);
     // 如果通信时采用了 gzip 压缩，解压缩并回写（buf 和 size）
@@ -118,7 +85,6 @@ private:
     std::shared_ptr<beast::tcp_stream> insocket_;
     std::shared_ptr<asio::ssl::context> ctx_;    // TODO reference?
     std::shared_ptr<beast::ssl_stream<beast::tcp_stream>> ssocket_;
-
 };
 
 template<typename T>

@@ -12,7 +12,7 @@ void test_http()
     task.target("/beast_server.cpp");
     task.set(http::field::host, "127.0.0.1");
     request->set_task(task, false);
-    request->set_callback([](const HTTPRequest& dummy, HTTPResponse& hr, const std::error_code& ec) {
+    request->set_callback([](const HTTPRequest& dummy, const HTTPResponse& hr, const std::error_code& ec) {
         if (ec || hr.get_status_code() != 200)
         {
             if (ec)

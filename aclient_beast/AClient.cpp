@@ -1,11 +1,17 @@
 ﻿#include "AClient.h"
 #include <boost\algorithm\string\case_conv.hpp>
+#include <iostream>
 
 using namespace std;
 
-std::atomic<unsigned long> HTTPRequest::count = 0;
+namespace {
+    // 追踪 pending request，监控 socket 占用
+    std::atomic<unsigned long> count_of_request = 0;
+    constexpr unsigned DEFAULT_PORT = 80;
+    constexpr unsigned DEFAULT_SECURITY_PORT = 443;
+}
 
-void default_handler(const HTTPRequest& request, HTTPResponse& response, const std::error_code& ec)
+void default_handler(const HTTPRequest& request, const HTTPResponse& response, const std::error_code& ec)
 {
     if (ec.value() == 0)
     {
@@ -50,6 +56,20 @@ void HTTPRequest::set_stream(bool https, unsigned port)
         }
         port_ = port > 0 ? port : DEFAULT_PORT;
     }
+}
+
+HTTPRequest::HTTPRequest(asio::io_context & ioc, unsigned int id) :
+    ioc_(ioc), uuid_(id), port_(DEFAULT_PORT), resolver_(ioc_)
+{
+    ++count_of_request;
+    if (count_of_request % 100 == 0) {
+        spdlog::warn("There are {} sockets.", count_of_request);
+    }
+}
+
+HTTPRequest::~HTTPRequest()
+{
+    --count_of_request;
 }
 
 void HTTPRequest::set_task(task_t task, bool https, unsigned port)

@@ -1,10 +1,22 @@
 #include "WebSocketRequest.h"
+#include <iostream>
 
 using namespace std;
+
+namespace {
+    constexpr unsigned DEFAULT_PORT = 80;
+    constexpr unsigned DEFAULT_SECURITY_PORT = 443;
+}
 
 std::shared_ptr<WebSocketRequest> HTTPClient::create_websocket(unsigned id)
 {
     return std::shared_ptr<WebSocketRequest>(new WebSocketRequest(ioc_, id));
+}
+
+WebSocketRequest::WebSocketRequest(asio::io_context & ioc, unsigned int id) :
+    ioc_(ioc), uuid_(id), port_(DEFAULT_PORT), resolver_(ioc_), timer_(ioc_)
+{
+
 }
 
 WebSocketRequest::~WebSocketRequest()
