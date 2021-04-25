@@ -32,34 +32,8 @@ void default_handler(const HTTPRequest& request, const HTTPResponse& response, c
     return;
 }
 
-void HTTPRequest::set_stream(bool https, unsigned port)
-{
-    if (https)
-    {
-        ctx_ = std::make_shared<asio::ssl::context>(asio::ssl::context::sslv23_client);
-        if (ctx_)
-        {
-            ssocket_ = std::make_shared<beast::ssl_stream<beast::tcp_stream>>(ioc_, *ctx_);
-            if (ssocket_)
-            {
-                insocket_.reset();
-            }
-        }
-        port_ = port > 0 ? port : DEFAULT_SECURITY_PORT;
-    }
-    else
-    {
-        insocket_ = std::make_shared<beast::tcp_stream>(ioc_);
-        if (insocket_)
-        {
-            ssocket_.reset();
-        }
-        port_ = port > 0 ? port : DEFAULT_PORT;
-    }
-}
-
 HTTPRequest::HTTPRequest(asio::io_context & ioc, unsigned int id) :
-    ioc_(ioc), uuid_(id), port_(DEFAULT_PORT), resolver_(ioc_)
+    ioc_(ioc), uuid_(id), resolver_(ioc_)
 {
     ++count_of_request;
     if (count_of_request % 100 == 0) {
@@ -72,15 +46,15 @@ HTTPRequest::~HTTPRequest()
     --count_of_request;
 }
 
-void HTTPRequest::set_task(task_t task, bool https, unsigned port)
+void HTTPRequest::set_task(task_t task)
 {
-    const auto ctor = task.find(http::field::host);
-    if (task.cend() == ctor) {
-        assert(false);
-        spdlog::warn("there is no host.");
-        return;
-    }
-    std::string host = ctor->value().to_string();
+    task.version(10);   // only support 1.0 which has no chunked
+    //task.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+    swap(task, task_);
+}
+
+void HTTPRequest::execute(const std::string& host, bool https , unsigned port)
+{
     if (host.find("http://") != string::npos ||
         host.find("https://") != string::npos)
     {
@@ -88,27 +62,44 @@ void HTTPRequest::set_task(task_t task, bool https, unsigned port)
         spdlog::warn("the host can't start with http/s.");
         return;
     }
-    std::swap(host_, host);
-    this->set_stream(https, port);
-    task.version(10);   // only support 1.0 which has no chunked
-    //task.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-    swap(task, task_);
-}
-
-void HTTPRequest::execute()
-{
-    assert(port_ > 0);
-    assert(host_.empty() == false);
+    if (host.empty())
+    {
+        assert(false);
+        spdlog::warn("the host is empty.");
+        return;
+    }
+    if (https)
+    {
+        ctx_ = std::make_shared<asio::ssl::context>(asio::ssl::context::sslv23_client);
+        if (ctx_)
+        {
+            ssocket_ = std::make_shared<beast::ssl_stream<beast::tcp_stream>>(ioc_, *ctx_);
+            if (ssocket_)
+            {
+                insocket_.reset();
+            }
+        }
+        port = port > 0 ? port : DEFAULT_SECURITY_PORT;
+    }
+    else
+    {
+        insocket_ = std::make_shared<beast::tcp_stream>(ioc_);
+        if (insocket_)
+        {
+            ssocket_.reset();
+        }
+        port = port > 0 ? port : DEFAULT_PORT;
+    }
     assert((ctx_ == nullptr) == (ssocket_ == nullptr));
     assert((insocket_ == nullptr) != (ssocket_ == nullptr));
-
+    spdlog::info("-> http{}://{}:{} @{}", (ssocket_ ? "s" : ""), host, port, static_cast<void*>(this));
     res_.clear();
     using asio::ip::tcp;
-    asio::co_spawn(ioc_, [this, self = shared_from_this()]() ->asio::awaitable<void> {
+    asio::co_spawn(ioc_, [this, self = shared_from_this(), host, port]() ->asio::awaitable<void> {
         try
         {
             asio::ip::tcp::resolver::results_type endpoints =
-                co_await resolver_.async_resolve(tcp::v4(), host_, std::to_string(port_), asio::use_awaitable);
+                co_await resolver_.async_resolve(tcp::v4(), host, std::to_string(port), asio::use_awaitable);
             // 二选一
             assert((nullptr == ssocket_) != (nullptr == insocket_));
             auto & stream = ssocket_ ? beast::get_lowest_layer(*ssocket_) : *insocket_;
@@ -143,7 +134,7 @@ void HTTPRequest::execute()
     }, asio::detached);
 }
 
-void HTTPRequest::finish(boost::system::error_code ec, std::string msg)
+void HTTPRequest::finish(boost::system::error_code ec)
 {
     auto get_ip = [this]() {
         std::string ip;
@@ -167,16 +158,12 @@ void HTTPRequest::finish(boost::system::error_code ec, std::string msg)
         )
     {
         asio::ssl::error::stream_truncated;
-        spdlog::warn("async_read faild:{}, {}. http{}://{}({}):{}@{}", ec.value(), ec.message(),
-            ssocket_ ? "s" : "",
-            host_, get_ip(), port_, static_cast<void*>(this));
+        spdlog::warn("http/https faild:{}, {}. @{}", ec.value(), ec.message(), static_cast<void*>(this));
         ec.clear();
     }
     else if (ec && (ec.value() != asio::error::operation_aborted))
     {
-        spdlog::error("{} faild:{}, {}. http{}://{}({}):{}@{}", msg, ec.value(), ec.message(),
-            ssocket_ ? "s" : "",
-            host_, get_ip(), port_, static_cast<void*>(this));
+        spdlog::error("http/https faild:{}, {}. @{}", ec.value(), ec.message(), static_cast<void*>(this));
     }
 
     HTTPResponse tmp{ std::move(res_) };

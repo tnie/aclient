@@ -52,27 +52,20 @@ public:
     {
         return std::shared_ptr<HTTPRequest>(new HTTPRequest(ioc, id));
     }
-
     // TODO 以下 set_xx 属性是否应该移到构造中？如何避免执行过程中的修改？
-
-    /// <param name="port">为零时根据协议类型使用默认端口。http 80 https 443</param>
-    void set_task(task_t task, bool https = true, unsigned port = 0);
+    void set_task(task_t task);
     void set_callback(Callback hl);
-    void execute();
+    /// <param name="port">为零时根据协议类型使用默认端口。http 80 https 443</param>
+    void execute(const std::string& host, bool https = true, unsigned port = 0);
     void cancel();
     //
-    const std::string& get_host() const { return host_; }
     const task_t& get_task() const { return task_; }
-    unsigned get_port() const { return port_; }
     unsigned get_id() const { return uuid_; }
 private:
-    void set_stream(bool https , unsigned port = 0);
     // 如果通信时采用了 gzip 压缩，解压缩并回写（buf 和 size）
     void handle_gzip();
-    void finish(boost::system::error_code, std::string msg = "");
+    void finish(boost::system::error_code);
 private:
-    std::string host_;
-    unsigned port_;
     task_t task_;   // 用于扩展 HTTPRequest 的功能
     beast::flat_buffer buffer_;
     http::response<http::string_body> res_;

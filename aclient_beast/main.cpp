@@ -11,17 +11,17 @@ void test_http()
     task.method(http::verb::get);
     task.target("/beast_server.cpp");
     task.set(http::field::host, "127.0.0.1");
-    request->set_task(task, false);
+    request->set_task(task);
     request->set_callback([](const HTTPRequest& dummy, const HTTPResponse& hr, const std::error_code& ec) {
         if (ec || hr.get_status_code() != 200)
         {
             if (ec)
             {
-                spdlog::warn("http[s] failed:[{}:{}], {}", ec.category().name(), ec.value(), ec.message());
+                spdlog::warn("http/https failed:[{}:{}], {}", ec.category().name(), ec.value(), ec.message());
             }
             if (hr.get_status_code() != 200)
             {
-                spdlog::warn("http[s] failed: status_code[{}]", hr.get_status_code());
+                spdlog::warn("http/https failed: status_code[{}]", hr.get_status_code());
             }
             return;
         }
@@ -49,7 +49,7 @@ void test_http()
             spdlog::info(msg);
         }
     });
-    request->execute();
+    request->execute("127.0.0.1", false);
 }
 
 auto test_ws()
@@ -67,6 +67,7 @@ int main()
 {
     spdlog::set_level(spdlog::level::debug);
     //SetConsoleOutputCP(CP_UTF8);
-    test_ws();
+    //test_ws();
+    test_http();
     Singleton<HTTPClient>::instance().wait();
 }
