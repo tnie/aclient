@@ -119,6 +119,7 @@ void HTTPRequest::execute(const std::string& host, bool https , unsigned port)
             }
             else if (insocket_)
             {
+                // TODO 处理 empty body/chunked body/file body/gzipped content
                 std::size_t len = co_await boost::beast::http::async_read(*insocket_, buffer_, res_, asio::use_awaitable);
             }
             finish({});

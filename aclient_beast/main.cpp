@@ -9,8 +9,8 @@ void test_http()
     auto request = Singleton<HTTPClient>::instance().create_request(tag);
     task_t task;
     task.method(http::verb::get);
-    task.target("/beast_server.cpp");
-    task.set(http::field::host, "127.0.0.1");
+    task.target("/ip");
+    task.set(http::field::host, "httpbin.org");
     request->set_task(task);
     request->set_callback([](const HTTPRequest& dummy, const HTTPResponse& hr, const std::error_code& ec) {
         if (ec || hr.get_status_code() != 200)
@@ -49,14 +49,14 @@ void test_http()
             spdlog::info(msg);
         }
     });
-    request->execute("127.0.0.1", false);
+    request->execute("httpbin.org", false);
 }
 
 auto test_ws()
 {
     constexpr unsigned tag = 1;
     auto request = Singleton<HTTPClient>::instance().create_websocket(tag);
-    request->set_task("yun.ydtg.com.cn", false, "//?username=abc&password=123");
+    request->set_task("yun.ydtg.com.cn", false, "/?username=abc&password=123");
     request->execute();
     return std::async(std::launch::async, [=]() {
         std::this_thread::sleep_for(5s);
