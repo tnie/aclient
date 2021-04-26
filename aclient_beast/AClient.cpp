@@ -61,7 +61,7 @@ void HTTPRequest::set_task(task_t task)
     swap(task, task_);
 }
 
-std::string decompress(const char* start, size_t size, const std::string& content_encoding)
+std::string gzip::decompress(const char* start, size_t size, const std::string& content_encoding)
 {
     try
     {
@@ -212,15 +212,6 @@ void HTTPRequest::finish(boost::system::error_code ec)
     else if (ec && (ec.value() != asio::error::operation_aborted))
     {
         spdlog::error("http/https faild:{}, {}. @{}", ec.value(), ec.message(), static_cast<void*>(this));
-    }
-
-    // 处理 gzipped content
-    const auto & cit = res_.find(http::field::content_encoding);
-    if (cit != res_.cend())
-    {
-        const auto & content_encoding = cit->value();
-        auto content = ::decompress(res_.body().data(), res_.body().size(), content_encoding.to_string());
-        spdlog::info(content);
     }
     HTTPResponse tmp{ std::move(res_) };
     if (!handler_) {

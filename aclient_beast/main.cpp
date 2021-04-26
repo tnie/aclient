@@ -39,10 +39,8 @@ void test_http()
         const auto& msg = hr.get_string_body();
         if (gzip.find("gzip") != std::string::npos)
         {
-            if (gzip::is_compressed(msg.c_str(), msg.size()))
-            {
-                auto content = gzip::decompress(msg.c_str(), msg.size());
-            }
+            auto content = gzip::decompress(msg.c_str(), msg.size(), "gzip");
+            spdlog::info(content);
         }
         else {
             spdlog::info(msg);

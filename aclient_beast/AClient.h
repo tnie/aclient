@@ -114,6 +114,8 @@ private:
 
 namespace gzip
 {
-    inline bool is_compressed(const char* data, std::size_t size) { return false; };
-    inline std::string decompress(const char* data, std::size_t size) { return{}; };
+    /// <summary>
+    /// @content_encoding one of "deflate"/"gzip"/""
+    /// </summary>
+    std::string decompress(const char* start, size_t size, const std::string& content_encoding);
 }
