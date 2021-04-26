@@ -48,7 +48,7 @@ void test_http()
             spdlog::info(msg);
         }
     });
-    request->execute("httpbin.org", false);
+    request->execute("httpbin.org", true);
 }
 
 auto test_ws()

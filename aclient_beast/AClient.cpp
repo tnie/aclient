@@ -151,8 +151,11 @@ void HTTPRequest::execute(const std::string& host, bool https , unsigned port)
             if (ssocket_) {
                 // http 通信不应进入此函数
                 co_await ssocket_->async_handshake(asio::ssl::stream_base::client, asio::use_awaitable);
+                std::size_t len = co_await http::async_write(*ssocket_, task_, asio::use_awaitable);
             }
-            std::size_t len = co_await http::async_write(stream, task_, asio::use_awaitable);
+            else {
+                std::size_t len = co_await http::async_write(stream, task_, asio::use_awaitable);
+            }
             // NOTE 有的服务端在客户端关闭写（继续读）之后，会直接关闭连接
             //socket_.shutdown(asio::socket_base::shutdown_send);
             if (ssocket_)
