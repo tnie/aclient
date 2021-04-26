@@ -112,7 +112,7 @@ void HTTPRequest::execute(const std::string& host, bool https , unsigned port)
     }
     if (https)
     {
-        ctx_ = std::make_shared<asio::ssl::context>(asio::ssl::context::sslv23_client);
+        ctx_ = std::make_shared<asio::ssl::context>(asio::ssl::context::tlsv12_client);
         if (ctx_)
         {
             ssocket_ = std::make_shared<beast::ssl_stream<beast::tcp_stream>>(ioc_, *ctx_);
@@ -162,6 +162,8 @@ void HTTPRequest::execute(const std::string& host, bool https , unsigned port)
             {
                 std::size_t len = co_await boost::beast::http::async_read(*ssocket_, buffer_, res_, asio::use_awaitable);
                 assert(insocket_ == nullptr);
+                // Gracefully close the stream
+                co_await ssocket_->async_shutdown(asio::use_awaitable);
             }
             else if (insocket_)
             {
