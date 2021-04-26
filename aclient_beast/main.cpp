@@ -9,8 +9,7 @@ void test_http()
     auto request = Singleton<HTTPClient>::instance().create_request(tag);
     task_t task;
     task.method(http::verb::get);
-    task.target("/ip");
-    task.set(http::field::host, "httpbin.org");
+    task.target("/stream/300");
     request->set_task(task);
     request->set_callback([](const HTTPRequest& dummy, const HTTPResponse& hr, const std::error_code& ec) {
         if (ec || hr.get_status_code() != 200)

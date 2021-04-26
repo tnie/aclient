@@ -48,7 +48,8 @@ HTTPRequest::~HTTPRequest()
 
 void HTTPRequest::set_task(task_t task)
 {
-    task.version(10);   // only support 1.0 which has no chunked
+    //task.version(10);   // only support 1.0 which has no chunked
+    task.version(11);
     //task.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
     swap(task, task_);
 }
@@ -93,6 +94,7 @@ void HTTPRequest::execute(const std::string& host, bool https , unsigned port)
     assert((ctx_ == nullptr) == (ssocket_ == nullptr));
     assert((insocket_ == nullptr) != (ssocket_ == nullptr));
     spdlog::info("-> http{}://{}:{} @{}", (ssocket_ ? "s" : ""), host, port, static_cast<void*>(this));
+    task_.set(http::field::host, host);
     res_.clear();
     using asio::ip::tcp;
     asio::co_spawn(ioc_, [this, self = shared_from_this(), host, port]() ->asio::awaitable<void> {
@@ -119,7 +121,6 @@ void HTTPRequest::execute(const std::string& host, bool https , unsigned port)
             }
             else if (insocket_)
             {
-                // TODO 处理 empty body/chunked body/file body/gzipped content
                 std::size_t len = co_await boost::beast::http::async_read(*insocket_, buffer_, res_, asio::use_awaitable);
             }
             finish({});
