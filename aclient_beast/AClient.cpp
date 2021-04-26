@@ -1,4 +1,10 @@
 ﻿#include "AClient.h"
+#include <boost\iostreams\stream.hpp>
+#include <boost\iostreams\device\array.hpp>
+#include <boost\iostreams\filtering_stream.hpp>
+#include <boost\iostreams\filter\gzip.hpp>
+#include <boost\iostreams\copy.hpp>
+#include <boost\beast\http\parser.hpp>
 #include <boost\algorithm\string\case_conv.hpp>
 #include <iostream>
 
@@ -50,8 +56,43 @@ void HTTPRequest::set_task(task_t task)
 {
     //task.version(10);   // only support 1.0 which has no chunked
     task.version(11);
+    task.set(http::field::accept_encoding, "gzip");
     //task.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
     swap(task, task_);
+}
+
+std::string decompress(const char* start, size_t size, const std::string& content_encoding)
+{
+    try
+    {
+        //decompress with boost's interface
+        boost::iostreams::array_source src{ start, size };
+        boost::iostreams::filtering_istream is;
+        //boost::iostreams::zlib_params zparams{};
+        if (content_encoding == "deflate")
+        {
+            spdlog::info( "decompressing deflate");
+            is.push(boost::iostreams::zlib_decompressor{});			// deflate
+        }
+        else if (content_encoding == "gzip")
+        {
+            spdlog::info("decompressing gzip");
+            is.push(boost::iostreams::gzip_decompressor{});			// gzip
+        }
+        else if (content_encoding == "")
+        {
+            spdlog::info("uncompressed ");
+        }
+        is.push(src);
+        string out;
+        boost::iostreams::copy(is, boost::iostreams::back_inserter(out));
+        return out;
+    }
+    catch (const std::exception& e)
+    {
+        spdlog::error("{} {}:{}", e.what(), __FILE__, __LINE__);
+    }
+    return{};
 }
 
 void HTTPRequest::execute(const std::string& host, bool https , unsigned port)
@@ -168,46 +209,19 @@ void HTTPRequest::finish(boost::system::error_code ec)
         spdlog::error("http/https faild:{}, {}. @{}", ec.value(), ec.message(), static_cast<void*>(this));
     }
 
-    HTTPResponse tmp{ std::move(res_) };
-    const string gzip = tmp.get_header("content-encoding");
-    if (gzip.find("gzip") != std::string::npos) {
-        handle_gzip();
+    // 处理 gzipped content
+    const auto & cit = res_.find(http::field::content_encoding);
+    if (cit != res_.cend())
+    {
+        const auto & content_encoding = cit->value();
+        auto content = ::decompress(res_.body().data(), res_.body().size(), content_encoding.to_string());
+        spdlog::info(content);
     }
+    HTTPResponse tmp{ std::move(res_) };
     if (!handler_) {
         handler_ = default_handler;
     }
     handler_ (*this, tmp, ec);
-}
-
-void HTTPRequest::handle_gzip()
-{
-    assert(false);
-    //const string gzip = response_.get_header("content-encoding");
-    //if (gzip.find("gzip") != std::string::npos)
-    //{
-    //    std::istream response_stream(&response_.get_response_buf());
-    //    std::istreambuf_iterator<char> eos;
-    //    const string msg = string(std::istreambuf_iterator<char>(response_stream), eos);
-    //    spdlog::info("Response of {} has 'gzip', and size is {}.", task_.base().target().data(), msg.size());
-    //    if (gzip::is_compressed(msg.c_str(), msg.size()))
-    //    {
-    //        string content = gzip::decompress(msg.c_str(), msg.size());
-    //        // 写回 response_
-    //        if (size_t size = content.size())
-    //        {
-    //            auto s2 = response_.get_response_buf().sputn(content.data(), size);
-    //            assert(s2 == size);
-    //            //response_.add_header("content-length", std::to_string(s2), Passkey<HTTPRequest>()); // 更新大小
-    //            //response_.add_header("content-encoding", "", Passkey<HTTPRequest>());   // 抹掉 ‘gzip’
-    //            spdlog::info("{} override buf & content-length: {} -> buffer.", task_.base().target().data(), s2);
-    //        }
-    //    }
-    //    else
-    //    {
-    //        const string url;// = task_.get_url(host_, port_, ssocket_ != nullptr);
-    //        spdlog::error("gzip decompress failed. {}", url);
-    //    }
-    //}
 }
 
 void HTTPRequest::cancel()

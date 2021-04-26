@@ -62,8 +62,6 @@ public:
     const task_t& get_task() const { return task_; }
     unsigned get_id() const { return uuid_; }
 private:
-    // 如果通信时采用了 gzip 压缩，解压缩并回写（buf 和 size）
-    void handle_gzip();
     void finish(boost::system::error_code);
 private:
     task_t task_;   // 用于扩展 HTTPRequest 的功能
